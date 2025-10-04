@@ -45,7 +45,7 @@ or, if you prefer to launch directly from the packaged jar (after running `./gra
 ```bash
 java -cp build/libs/on-the-fly-a-star-0.1.0.jar pathplanning.examples.AutoPathPlanning
 ```
-    To run another entry point, override the main class:
+To run another entry point, override the main class:
 ```bash
 ./gradlew run -PmainClass=pathplanning.examples.TeleopPathPlanning
 ```
