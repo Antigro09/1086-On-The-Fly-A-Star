@@ -1,0 +1,82 @@
+# Robot Physical Constraints
+robot:
+  max_velocity: 3.0  # m/s
+  max_acceleration: 2.5  # m/s^2
+  max_angular_velocity: 3.14159  # rad/s (180 deg/s)
+  max_angular_acceleration: 6.28  # rad/s^2
+  radius: 0.45  # meters (with bumpers)
+  track_width: 0.6  # meters
+  wheelbase: 0.6  # meters
+
+# Path Planning Parameters
+planning:
+  frequency_hz: 20  # Hz
+  deviation_threshold: 0.3  # meters
+  replanning_enabled: true
+  heuristic_weight: 1.0  # A* heuristic weight (1.0 = optimal, >1 = faster but suboptimal)
+  max_iterations: 10000
+  timeout_ms: 500  # Maximum planning time
+
+# Dynamic Obstacles
+obstacles:
+  prediction_time: 1.0  # seconds
+  expiry_time_ms: 2000  # milliseconds
+  min_confidence: 0.5  # Minimum detection confidence to consider
+  inflation_radius: 0.2  # Extra safety margin around obstacles (meters)
+  tracking_enabled: true
+  kalman_filter:
+    process_noise: 0.1
+    measurement_noise: 0.5
+
+# Path Optimization
+optimization:
+  smoothing_enabled: true
+  bezier_points_per_segment: 10
+  max_curvature: 2.0  # rad/m
+  simplification_enabled: true
+  shortcut_enabled: true
+  cost_weights:
+    distance: 1.0
+    curvature: 0.3
+    obstacle_proximity: 0.5
+    time: 0.8
+
+# Velocity Profiling
+velocity_profile:
+  time_step: 0.02  # seconds (50 Hz)
+  acceleration_limit_factor: 0.9  # Use 90% of max acceleration for safety
+  deceleration_distance_buffer: 0.5  # meters
+
+# Network Communication
+network:
+  robot_pose_topic: "robot_pose"
+  target_pose_topic: "target_pose"
+  trajectory_topic: "trajectory"
+  vision_table: "vision"
+  planner_table: "pathplanner"
+  update_rate_hz: 50  # Hz
+
+# Vision Integration
+vision:
+  enabled: true
+  latency_compensation: true
+  max_latency_ms: 100
+  object_types:
+    - "game_piece"
+    - "robot"
+    - "field_element"
+
+# Logging and Debugging
+logging:
+  enabled: true
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+  log_planning_time: true
+  log_replanning_triggers: true
+  log_obstacle_updates: false
+
+# Performance Tuning
+performance:
+  multi_threading: true
+  cache_visibility_graph: true
+  lazy_evaluation: true
+  early_termination: true
