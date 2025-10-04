@@ -1,7 +1,7 @@
 # Robot Physical Constraints
 robot:
-  max_velocity: 3.0  # m/s
-  max_acceleration: 2.5  # m/s^2
+  max_velocity: 4.0  # m/s
+  max_acceleration: 4.0  # m/s^2
   max_angular_velocity: 3.14159  # rad/s (180 deg/s)
   max_angular_acceleration: 6.28  # rad/s^2
   radius: 0.45  # meters (with bumpers)
@@ -15,7 +15,7 @@ planning:
   replanning_enabled: true
   heuristic_weight: 1.0  # A* heuristic weight (1.0 = optimal, >1 = faster but suboptimal)
   max_iterations: 10000
-  timeout_ms: 500  # Maximum planning time
+  timeout_ms: 300  # Maximum planning time
 
 # Dynamic Obstacles
 obstacles:
@@ -54,17 +54,15 @@ network:
   trajectory_topic: "trajectory"
   vision_table: "vision"
   planner_table: "pathplanner"
-  update_rate_hz: 50  # Hz
+  update_rate_hz: 40  # Hz
 
 # Vision Integration
 vision:
   enabled: true
   latency_compensation: true
-  max_latency_ms: 100
+  max_latency_ms: 75
   object_types:
-    - "game_piece"
-    - "robot"
-    - "field_element"
+    - "algae"
 
 # Logging and Debugging
 logging:
