@@ -3,6 +3,7 @@ package pathplanning.util;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import pathplanning.core.VisibilityGraph;
+import pathplanning.util.NavGridLoader.NavGridData;
 
 import java.io.File;
 import java.io.IOException;
@@ -11,56 +12,60 @@ import java.util.List;
 
 /**
  * Manages field geometry and static obstacles
+ * Supports both field_config.json and navgrid.json formats
  */
 public class FieldMap {
     private final double fieldWidth;
     private final double fieldLength;
     private final List<VisibilityGraph.Obstacle> staticObstacles;
-    private static final double DEFAULT_FIELD_WIDTH = 8.21;
-    private static final double DEFAULT_FIELD_LENGTH = 16.54;
+    private NavGridData navGridData;
     
+    /**
+     * Constructor - automatically detects format
+     */
     public FieldMap(String configPath) {
         this.staticObstacles = new ArrayList<>();
-        double width = DEFAULT_FIELD_WIDTH;
-        double length = DEFAULT_FIELD_LENGTH;
-        boolean configLoaded = false;
-
-        // Load from config file
+        
+        // Try to detect format and load
         try {
-            FieldDimensions dimensions = loadFromConfig(configPath);
-            width = dimensions.width();
-            length = dimensions.length();
-            configLoaded = true;
+            if (configPath.endsWith("navgrid.json")) {
+                loadFromNavGrid(configPath);
+                this.fieldWidth = navGridData.fieldHeight; // NavGrid uses x/y differently
+                this.fieldLength = navGridData.fieldWidth;
+            } else {
+                loadFromConfig(configPath);
+                this.fieldWidth = 8.21; // Default 2024 field
+                this.fieldLength = 16.54;
+            }
         } catch (IOException e) {
             System.err.println("Failed to load field config: " + e.getMessage());
-        }
-
-        this.fieldWidth = width;
-        this.fieldLength = length;
-
-        if (!configLoaded || staticObstacles.isEmpty()) {
-            staticObstacles.clear();
+            this.fieldWidth = 8.21;
+            this.fieldLength = 16.54;
             loadDefaultObstacles();
         }
     }
     
     /**
-     * Load field configuration from JSON
+     * Load from navgrid.json format (PathPlanner format)
      */
-    private FieldDimensions loadFromConfig(String configPath) throws IOException {
+    private void loadFromNavGrid(String navGridPath) throws IOException {
+        System.out.println("Loading field from navgrid.json format...");
+        navGridData = NavGridLoader.loadFromFile(navGridPath);
+        staticObstacles.addAll(navGridData.obstacles);
+    }
+    
+    /**
+     * Load field configuration from field_config.json
+     */
+    private void loadFromConfig(String configPath) throws IOException {
+        System.out.println("Loading field from field_config.json format...");
         ObjectMapper mapper = new ObjectMapper();
         JsonNode root = mapper.readTree(new File(configPath));
-        JsonNode fieldNode = root.get("field");
-        double width = fieldNode != null
-            ? fieldNode.path("width_meters").asDouble(DEFAULT_FIELD_WIDTH)
-            : DEFAULT_FIELD_WIDTH;
-        double length = fieldNode != null
-            ? fieldNode.path("length_meters").asDouble(DEFAULT_FIELD_LENGTH)
-            : DEFAULT_FIELD_LENGTH;
         
         JsonNode obstaclesNode = root.get("obstacles");
         if (obstaclesNode != null && obstaclesNode.isArray()) {
             for (JsonNode obstacleNode : obstaclesNode) {
+                String name = obstacleNode.get("name").asText();
                 JsonNode vertices = obstacleNode.get("vertices");
                 
                 List<Double> xPoints = new ArrayList<>();
@@ -75,16 +80,16 @@ public class FieldMap {
                 double[] yArray = yPoints.stream().mapToDouble(Double::doubleValue).toArray();
                 
                 staticObstacles.add(new VisibilityGraph.Obstacle(xArray, yArray));
+                System.out.println("  Loaded obstacle: " + name);
             }
         }
-
-        return new FieldDimensions(width, length);
     }
     
     /**
      * Load default obstacles (field boundaries and common structures)
      */
     private void loadDefaultObstacles() {
+        System.out.println("Loading default field obstacles...");
         // Field boundaries
         addFieldBoundaries();
         
@@ -139,6 +144,36 @@ public class FieldMap {
     public boolean isWithinField(double x, double y) {
         return x >= 0 && x <= fieldLength && y >= 0 && y <= fieldWidth;
     }
-
-    private record FieldDimensions(double width, double length) {}
+    
+    /**
+     * Check if position is traversable (if using navgrid)
+     */
+    public boolean isTraversable(double x, double y) {
+        if (navGridData != null) {
+            return NavGridLoader.isTraversable(navGridData, x, y);
+        }
+        
+        // If no navgrid, check against obstacles
+        for (VisibilityGraph.Obstacle obstacle : staticObstacles) {
+            if (obstacle.contains(x, y)) {
+                return false;
+            }
+        }
+        
+        return isWithinField(x, y);
+    }
+    
+    /**
+     * Get navigation grid data (if loaded from navgrid.json)
+     */
+    public NavGridData getNavGridData() {
+        return navGridData;
+    }
+    
+    /**
+     * Check if navgrid format is being used
+     */
+    public boolean hasNavGrid() {
+        return navGridData != null;
+    }
 }
