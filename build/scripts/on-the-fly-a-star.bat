@@ -68,7 +68,7 @@ goto fail
 :execute
 @rem Setup the command line
 
-set CLASSPATH=%APP_HOME%\lib\on-the-fly-a-star-0.1.0.jar;%APP_HOME%\lib\wpimath-java-2024.3.2.jar;%APP_HOME%\lib\ntcore-java-2024.3.2.jar;%APP_HOME%\lib\wpiunits-java-2024.3.2.jar;%APP_HOME%\lib\wpiutil-java-2024.3.2.jar;%APP_HOME%\lib\jackson-annotations-2.17.2.jar;%APP_HOME%\lib\jackson-core-2.17.2.jar;%APP_HOME%\lib\jackson-dataformat-yaml-2.17.2.jar;%APP_HOME%\lib\jackson-databind-2.17.2.jar;%APP_HOME%\lib\snakeyaml-2.2.jar
+set CLASSPATH=%APP_HOME%\lib\on-the-fly-a-star-0.1.0.jar;%APP_HOME%\lib\wpimath-java-2024.3.2.jar;%APP_HOME%\lib\ntcore-java-2024.3.2.jar;%APP_HOME%\lib\wpiunits-java-2024.3.2.jar;%APP_HOME%\lib\wpiutil-java-2024.3.2.jar;%APP_HOME%\lib\jackson-annotations-2.17.2.jar;%APP_HOME%\lib\jackson-core-2.17.2.jar;%APP_HOME%\lib\jackson-dataformat-yaml-2.17.2.jar;%APP_HOME%\lib\jackson-databind-2.17.2.jar;%APP_HOME%\lib\quickbuf-runtime-1.4.jar;%APP_HOME%\lib\snakeyaml-2.2.jar
 
 
 @rem Execute on-the-fly-a-star

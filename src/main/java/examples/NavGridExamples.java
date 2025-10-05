@@ -13,7 +13,7 @@ import pathplanning.util.Path;
 /**
  * Example using navgrid.json format for field configuration
  */
-public class NavGridExample {
+public class NavGridExamples {
     
     public static void main(String[] args) {
         System.out.println("=== NavGrid Path Planning Example ===\n");

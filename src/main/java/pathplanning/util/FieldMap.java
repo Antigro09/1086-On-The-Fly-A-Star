@@ -25,24 +25,26 @@ public class FieldMap {
      */
     public FieldMap(String configPath) {
         this.staticObstacles = new ArrayList<>();
+
+        double resolvedFieldWidth = 8.21; // Default 2024 field
+        double resolvedFieldLength = 16.54;
         
         // Try to detect format and load
         try {
             if (configPath.endsWith("navgrid.json")) {
                 loadFromNavGrid(configPath);
-                this.fieldWidth = navGridData.fieldHeight; // NavGrid uses x/y differently
-                this.fieldLength = navGridData.fieldWidth;
+                resolvedFieldWidth = navGridData.fieldHeight; // NavGrid uses x/y differently
+                resolvedFieldLength = navGridData.fieldWidth;
             } else {
                 loadFromConfig(configPath);
-                this.fieldWidth = 8.21; // Default 2024 field
-                this.fieldLength = 16.54;
             }
         } catch (IOException e) {
             System.err.println("Failed to load field config: " + e.getMessage());
-            this.fieldWidth = 8.21;
-            this.fieldLength = 16.54;
             loadDefaultObstacles();
         }
+
+        this.fieldWidth = resolvedFieldWidth;
+        this.fieldLength = resolvedFieldLength;
     }
     
     /**
