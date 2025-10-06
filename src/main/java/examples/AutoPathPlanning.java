@@ -17,7 +17,7 @@ import pathplanning.util.Path;
 
 import java.util.List;
 
-/**
+/*
  * Example: Autonomous path planning during auto period
  */
 public class AutoPathPlanning {
@@ -27,7 +27,7 @@ public class AutoPathPlanning {
         ConfigManager config = new ConfigManager("config/planner_params.yaml");
         
         // Initialize field map
-        FieldMap fieldMap = new FieldMap("config/field_config.json");
+        FieldMap fieldMap = new FieldMap("config/navgrid.json");
         
         // Initialize A* pathfinder
         AStar pathfinder = new AStar(

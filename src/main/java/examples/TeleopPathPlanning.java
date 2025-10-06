@@ -30,7 +30,7 @@ public class TeleopPathPlanning {
         ConfigManager config = new ConfigManager("config/planner_params.yaml");
         
         // Initialize field map
-        FieldMap fieldMap = new FieldMap("config/field_config.json");
+        FieldMap fieldMap = new FieldMap("config/navgrid.json");
         
         // Initialize A* pathfinder
         AStar pathfinder = new AStar(
