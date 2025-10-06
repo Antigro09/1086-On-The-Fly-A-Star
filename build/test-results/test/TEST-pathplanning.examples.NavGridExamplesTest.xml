@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="pathplanning.examples.NavGridExamplesTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2025-10-05T20:31:48" hostname="codespaces-2db7c1" time="0.247">
+<testsuite name="pathplanning.examples.NavGridExamplesTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2025-10-06T17:23:07" hostname="codespaces-2db7c1" time="0.205">
   <properties/>
-  <testcase name="navGridPipelineGeneratesFeasibleTrajectory()" classname="pathplanning.examples.NavGridExamplesTest" time="0.247"/>
+  <testcase name="navGridPipelineGeneratesFeasibleTrajectory()" classname="pathplanning.examples.NavGridExamplesTest" time="0.205"/>
   <system-out><![CDATA[Loading field from navgrid.json format...
 Loaded navigation grid:
   Field size: 17.548 x 8.052 m

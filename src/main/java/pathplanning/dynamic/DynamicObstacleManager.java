@@ -37,29 +37,28 @@ public class DynamicObstacleManager {
      */
     public void updateDynamicObstacles(List<DetectedObject> visionObjects) {
         long currentTime = System.currentTimeMillis();
-        
-        Set<String> seenIds = new HashSet<>();
-        
-        // Update existing or add new obstacles
+
         for (DetectedObject obj : visionObjects) {
-            String id = obj.getId();
-            seenIds.add(id);
-            
-            if (trackedObjects.containsKey(id)) {
-                // Update existing obstacle
-                TrackedObstacle tracked = trackedObjects.get(id);
-                tracked.update(obj, currentTime);
-            } else {
-                // Add new obstacle
-                TrackedObstacle newTracked = new TrackedObstacle(obj, currentTime);
-                trackedObjects.put(id, newTracked);
+            if (!obj.isFresh(expiryTimeMs)) {
+                continue;
             }
+
+            String id = obj.getId();
+            trackedObjects.compute(id, (key, tracked) -> {
+                if (tracked == null) {
+                    return new TrackedObstacle(obj, currentTime);
+                }
+                tracked.update(obj, currentTime);
+                return tracked;
+            });
         }
-        
-        // Remove expired obstacles
-        trackedObjects.entrySet().removeIf(entry -> 
-            (currentTime - entry.getValue().getLastSeen()) > expiryTimeMs
-        );
+
+        // Remove expired obstacles, extend lifetime for tracked roboRIO objects
+        trackedObjects.entrySet().removeIf(entry -> {
+            TrackedObstacle tracked = entry.getValue();
+            long timeout = tracked.isTracked() ? expiryTimeMs * 2 : expiryTimeMs;
+            return (currentTime - tracked.getLastSeen()) > timeout;
+        });
     }
     
     /**
@@ -174,6 +173,10 @@ public class DynamicObstacleManager {
         
         public long getLastSeen() {
             return lastSeen;
+        }
+
+        public boolean isTracked() {
+            return current != null && current.isTracked();
         }
         
         private static class TimestampedPose {

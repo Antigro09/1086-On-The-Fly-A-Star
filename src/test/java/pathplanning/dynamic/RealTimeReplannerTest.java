@@ -24,7 +24,9 @@ class RealTimeReplannerTest {
             1.0,
             0.5,
             0.5,
-            0.0
+            0.0,
+            false,
+            System.currentTimeMillis()
         );
         obstacleManager.updateDynamicObstacles(List.of(obstacle));
 

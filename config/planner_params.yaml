@@ -21,18 +21,6 @@ planning:
 field:
   config_format: "navgrid"  # Options: "navgrid" or "field_config"
   config_path: "config/navgrid.json"  # Path to field configuration
-  # Alternative: config_path: "config/field_config.json"
-
-# Dynamic Obstacles
-obstacles:
-  prediction_time: 1.0  # seconds
-  expiry_time_ms: 2000  # milliseconds
-  min_confidence: 0.5  # Minimum detection confidence to consider
-  inflation_radius: 0.2  # Extra safety margin around obstacles (meters)
-  tracking_enabled: true
-  kalman_filter:
-    process_noise: 0.1
-    measurement_noise: 0.5
 
 # Path Optimization
 optimization:
@@ -67,10 +55,25 @@ vision:
   enabled: true
   latency_compensation: true
   max_latency_ms: 100
+  use_field_relative: true  # Use field-relative from roboRIO
+  fallback_to_robot_relative: true  # Fallback if field-relative unavailable
   object_types:
-    - "game_piece"
-    - "robot"
-    - "field_element"
+    - "algae"
+  
+  # Algae-specific settings
+  algae:
+    radius: 0.1905  # 7.5 inches in meters
+    min_confidence: 0.45
+    tracking_enabled: true
+    max_age_ms: 2000
+
+# Dynamic Obstacles
+obstacles:
+  prediction_time: 0.5  # Algae are stationary, shorter prediction
+  expiry_time_ms: 2000
+  min_confidence: 0.45
+  inflation_radius: 0.3  # Safety margin around algae (meters)
+  tracking_enabled: true
 
 # Logging and Debugging
 logging:
