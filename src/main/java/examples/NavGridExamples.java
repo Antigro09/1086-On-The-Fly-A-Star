@@ -7,6 +7,7 @@ import pathplanning.core.PathSmoother;
 import pathplanning.optimization.PathOptimizer;
 import pathplanning.optimization.VelocityProfiler;
 import pathplanning.util.FieldMap;
+import pathplanning.util.NavGridLoader;
 import pathplanning.util.NavGridVisualizer;
 import pathplanning.util.Path;
 
@@ -32,8 +33,15 @@ public class NavGridExamples {
         AStar pathfinder = new AStar(fieldMap.getStaticObstacles(), 1.0);
         
         // Example: Plan path from blue alliance to red scoring
-        Pose2d start = new Pose2d(1.5, 4.0, Rotation2d.fromDegrees(0));
-        Pose2d goal = new Pose2d(15.5, 4.0, Rotation2d.fromDegrees(180));
+        NavGridLoader.NavGridData navGrid = fieldMap.getNavGridData();
+
+        Pose2d start = pickTraversablePose(navGrid, 0.2, Rotation2d.fromDegrees(0));
+        Pose2d goal = pickTraversablePose(navGrid, 0.8, Rotation2d.fromDegrees(180));
+
+        if (start == null || goal == null) {
+            System.err.println("ERROR: Unable to locate traversable start/goal in navgrid");
+            return;
+        }
         
         System.out.println("\nPlanning path:");
         System.out.println("  Start: " + formatPose(start));
@@ -101,5 +109,57 @@ public class NavGridExamples {
     private static String formatPose(Pose2d pose) {
         return String.format("(%.2f, %.2f, %.1f°)",
             pose.getX(), pose.getY(), pose.getRotation().getDegrees());
+    }
+
+    private static Pose2d pickTraversablePose(NavGridLoader.NavGridData navGrid,
+                                             double columnFraction,
+                                             Rotation2d heading) {
+        if (navGrid == null) {
+            return null;
+        }
+
+        int rows = navGrid.getGridRows();
+        int cols = navGrid.getGridCols();
+        int targetCol = Math.min(cols - 1, Math.max(0, (int) Math.round(cols * columnFraction)));
+        int centerRow = rows / 2;
+
+        for (int offset = 0; offset < rows; offset++) {
+            int rowUp = centerRow - offset;
+            if (rowUp >= 0) {
+                Pose2d pose = poseIfTraversable(navGrid, rowUp, targetCol, heading);
+                if (pose != null) {
+                    return pose;
+                }
+            }
+
+            int rowDown = centerRow + offset;
+            if (rowDown < rows) {
+                Pose2d pose = poseIfTraversable(navGrid, rowDown, targetCol, heading);
+                if (pose != null) {
+                    return pose;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private static Pose2d poseIfTraversable(NavGridLoader.NavGridData navGrid,
+                                            int row,
+                                            int col,
+                                            Rotation2d heading) {
+        boolean[][] grid = navGrid.grid;
+        if (row < 0 || row >= grid.length || col < 0 || col >= grid[0].length) {
+            return null;
+        }
+
+        if (!grid[row][col]) {
+            return null;
+        }
+
+        double nodeSize = navGrid.nodeSize;
+        double x = (col + 0.5) * nodeSize;
+        double y = (grid.length - row - 0.5) * nodeSize;
+        return new Pose2d(x, y, heading);
     }
 }

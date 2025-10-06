@@ -13,7 +13,9 @@ java {
 }
 
 application {
-    mainClass = 'pathplanning.examples.AutoPathPlanning'
+    mainClass.set(
+        (project.findProperty('mainClass') ?: 'pathplanning.examples.AutoPathPlanning') as String
+    )
 }
 
 repositories {
