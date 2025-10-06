@@ -22,7 +22,7 @@ public class AStar {
         this.heuristicWeight = heuristicWeight;
     }
     
-    /**
+    /*
      * Find path from start to goal using A* algorithm
      */
     public Path findPath(Pose2d start, Pose2d goal, List<VisibilityGraph.Obstacle> dynamicObstacles) {
