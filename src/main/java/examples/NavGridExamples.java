@@ -26,7 +26,7 @@ public class NavGridExamples {
         if (fieldMap.hasNavGrid()) {
             NavGridVisualizer.printStats(fieldMap.getNavGridData());
             // Uncomment to print full grid:
-            // NavGridVisualizer.printGrid(fieldMap.getNavGridData());
+            NavGridVisualizer.printGrid(fieldMap.getNavGridData());
         }
         
         // Initialize pathfinder
