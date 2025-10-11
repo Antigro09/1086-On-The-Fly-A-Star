@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="pathplanning.dynamic.RealTimeReplannerTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2025-10-06T19:51:37" hostname="codespaces-2db7c1" time="0.044">
+<testsuite name="pathplanning.dynamic.RealTimeReplannerTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2025-10-11T15:06:07" hostname="ANTHONYS_LAPTOP" time="0.02">
   <properties/>
-  <testcase name="triggersReplanWhenDynamicObstacleBlocksPath()" classname="pathplanning.dynamic.RealTimeReplannerTest" time="0.044"/>
+  <testcase name="triggersReplanWhenDynamicObstacleBlocksPath()" classname="pathplanning.dynamic.RealTimeReplannerTest" time="0.02"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>
