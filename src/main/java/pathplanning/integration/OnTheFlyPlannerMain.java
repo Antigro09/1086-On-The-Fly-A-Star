@@ -16,6 +16,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Entry point intended to run on the Jetson. Integrates operator commands, RoboRIO pose updates, and vision targets.
@@ -26,7 +27,7 @@ public final class OnTheFlyPlannerMain {
     private final MatchCoordinator matchCoordinator;
 
     private RobotState latestRobotState = new RobotState(new Pose3d(), 0.0, 0.0);
-    private TargetCommand lastCommand = new TargetCommand(TargetCommand.TargetType.NEAREST_ALGAE);
+    private TargetCommand lastCommand = TargetCommand.none();
 
     public OnTheFlyPlannerMain(Path configPath, Path navgridPath, Clock clock) throws IOException {
         this.plannerService = PlannerService.fromConfig(configPath, navgridPath, clock);
@@ -47,15 +48,41 @@ public final class OnTheFlyPlannerMain {
         teleopController.setDriverCommand(command);
     }
 
+    public void requestNearestAlgae() {
+        setDriverCommand(new TargetCommand(TargetCommand.TargetType.NEAREST_ALGAE));
+    }
+
+    public void requestProcessor(String label) {
+        setDriverCommand(new TargetCommand(TargetCommand.TargetType.PROCESSOR, label));
+    }
+
+    public void requestBarge(String label) {
+        setDriverCommand(new TargetCommand(TargetCommand.TargetType.BARGE, label));
+    }
+
+    public void clearRequest() {
+        setDriverCommand(TargetCommand.none());
+    }
+
     public void startAutonomous(String routineName, Duration autoDuration) {
         matchCoordinator.startAutonomous(routineName, autoDuration);
     }
 
-    public Trajectory planCurrent() throws PlannerException {
+    public Optional<Trajectory> planCurrent() throws PlannerException {
         matchCoordinator.tick();
         TargetCommand command = matchCoordinator.currentCommand(latestRobotState);
+        if (command == null || command.type() == TargetCommand.TargetType.NONE) {
+            return Optional.empty();
+        }
         lastCommand = command;
-        return plannerService.plan(latestRobotState, command);
+        try {
+            return Optional.ofNullable(plannerService.plan(latestRobotState, command));
+        } catch (PlannerException ex) {
+            if (ex.getMessage() != null && ex.getMessage().startsWith("No goal pose available")) {
+                return Optional.empty();
+            }
+            throw ex;
+        }
     }
 
     public void markObjectiveComplete() {
@@ -74,9 +101,14 @@ public final class OnTheFlyPlannerMain {
         Instant end = Instant.now().plusSeconds(17);
         while (Instant.now().isBefore(end)) {
             try {
-                Trajectory path = planner.planCurrent();
-                System.out.println("Planned " + path.getPoses().size() + " poses towards " + planner.lastCommand().type());
-                planner.markObjectiveComplete();
+                Optional<Trajectory> maybePath = planner.planCurrent();
+                if (maybePath.isPresent()) {
+                    Trajectory path = maybePath.get();
+                    System.out.println("Planned " + path.getPoses().size() + " poses towards " + planner.lastCommand().type());
+                    planner.markObjectiveComplete();
+                } else {
+                    System.out.println("Planner idle; no command queued");
+                }
             } catch (PlannerException ex) {
                 System.err.println("Planning failed: " + ex.getMessage());
             }

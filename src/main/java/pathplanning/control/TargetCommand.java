@@ -15,7 +15,12 @@ public record TargetCommand(TargetType type, String label, Pose3d directPose) {
         return new TargetCommand(TargetType.DIRECT, null, pose);
     }
 
+    public static TargetCommand none() {
+        return new TargetCommand(TargetType.NONE, null, null);
+    }
+
     public enum TargetType {
+        NONE,
         NEAREST_ALGAE,
         PROCESSOR,
         BARGE,

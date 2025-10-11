@@ -68,11 +68,11 @@ goto fail
 :execute
 @rem Setup the command line
 
-set CLASSPATH=%APP_HOME%\lib\on-the-fly-a-star-0.1.0.jar;%APP_HOME%\lib\wpimath-java-2024.3.2.jar;%APP_HOME%\lib\ntcore-java-2024.3.2.jar;%APP_HOME%\lib\wpiunits-java-2024.3.2.jar;%APP_HOME%\lib\wpiutil-java-2024.3.2.jar;%APP_HOME%\lib\jackson-annotations-2.17.2.jar;%APP_HOME%\lib\jackson-core-2.17.2.jar;%APP_HOME%\lib\jackson-dataformat-yaml-2.17.2.jar;%APP_HOME%\lib\jackson-databind-2.17.2.jar;%APP_HOME%\lib\quickbuf-runtime-1.4.jar;%APP_HOME%\lib\snakeyaml-2.2.jar
+set CLASSPATH=%APP_HOME%\lib\on-the-fly-a-star-0.1.0.jar;%APP_HOME%\lib\wpimath-java-2024.3.2.jar;%APP_HOME%\lib\ntcore-java-2024.3.2.jar;%APP_HOME%\lib\wpiunits-java-2024.3.2.jar;%APP_HOME%\lib\wpiutil-java-2024.3.2.jar;%APP_HOME%\lib\ejml-simple-0.43.jar;%APP_HOME%\lib\jackson-annotations-2.17.2.jar;%APP_HOME%\lib\jackson-core-2.17.2.jar;%APP_HOME%\lib\jackson-dataformat-yaml-2.17.2.jar;%APP_HOME%\lib\jackson-databind-2.17.2.jar;%APP_HOME%\lib\quickbuf-runtime-1.4.jar;%APP_HOME%\lib\ejml-fsparse-0.43.jar;%APP_HOME%\lib\ejml-fdense-0.43.jar;%APP_HOME%\lib\ejml-dsparse-0.43.jar;%APP_HOME%\lib\ejml-ddense-0.43.jar;%APP_HOME%\lib\ejml-cdense-0.43.jar;%APP_HOME%\lib\ejml-zdense-0.43.jar;%APP_HOME%\lib\ejml-core-0.43.jar;%APP_HOME%\lib\snakeyaml-2.2.jar
 
 
 @rem Execute on-the-fly-a-star
-"%JAVA_EXE%" %DEFAULT_JVM_OPTS% %JAVA_OPTS% %ON_THE_FLY_A_STAR_OPTS%  -classpath "%CLASSPATH%" pathplanning.examples.AutoPathPlanning %*
+"%JAVA_EXE%" %DEFAULT_JVM_OPTS% %JAVA_OPTS% %ON_THE_FLY_A_STAR_OPTS%  -classpath "%CLASSPATH%" pathplanning.integration.OnTheFlyPlannerMain %*
 
 :end
 @rem End local scope for the variables with windows NT shell

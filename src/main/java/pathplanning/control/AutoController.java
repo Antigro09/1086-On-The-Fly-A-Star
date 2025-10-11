@@ -45,7 +45,7 @@ public final class AutoController {
 
     public TargetCommand currentTargetCommand() {
         if (!hasNextObjective()) {
-            return null;
+            return TargetCommand.none();
         }
         PlannerConfig.ObjectiveStep step = activeRoutine.objectives().get(objectiveIndex);
         if (remainingCount <= 0) {

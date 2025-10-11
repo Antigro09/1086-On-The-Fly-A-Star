@@ -37,6 +37,7 @@ public final class ObjectiveManager {
 
     public Pose3d selectTarget(TargetCommand command, RobotState robotState) {
         return switch (command.type()) {
+            case NONE -> null;
             case DIRECT -> command.directPose();
             case NEAREST_ALGAE -> findNearestAlgae(robotState).orElse(null);
             case PROCESSOR -> selectConfiguredPose(config.getObjectives().processor(), command.label());

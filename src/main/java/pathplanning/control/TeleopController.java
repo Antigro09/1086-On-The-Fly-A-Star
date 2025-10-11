@@ -10,7 +10,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * Teleoperated planner wrapper. Object detection updates desired targets, but drivers retain veto control.
  */
 public final class TeleopController {
-    private final AtomicReference<TargetCommand> driverCommand = new AtomicReference<>(new TargetCommand(TargetCommand.TargetType.NEAREST_ALGAE));
+    private final AtomicReference<TargetCommand> driverCommand = new AtomicReference<>(TargetCommand.none());
     private volatile List<AlgaeTarget> visionTargets = List.of();
 
     public void setDriverCommand(TargetCommand command) {

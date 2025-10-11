@@ -41,7 +41,7 @@ public final class MatchCoordinator {
     public TargetCommand currentCommand(RobotState robotState) {
         if (autoEnabled) {
             TargetCommand command = autoController.currentTargetCommand();
-            if (command != null) {
+            if (command.type() != TargetCommand.TargetType.NONE) {
                 return command;
             }
             autoEnabled = false;
