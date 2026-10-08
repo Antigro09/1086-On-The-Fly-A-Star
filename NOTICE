@@ -1,0 +1,7 @@
+1086 geometric A* backend
+
+This repository retains its Apache License 2.0.
+World-State v1 API and test-only helper source exports are authored by Antigro09/FRC-World-State.
+Exact source revisions, hashes, attribution and distribution license are recorded in vendor/*/PROVENANCE.md.
+Vendored source files are unmodified and omitted from production adapter jars.
+Historical demonstration modifications are identified in their changed-file notices and docs/historical-migration.md.
