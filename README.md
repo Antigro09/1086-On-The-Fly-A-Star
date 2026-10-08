@@ -2,7 +2,7 @@
 
 This library proposes collision-validated **geometric paths** for an immutable World-State request. World-State and robot code choose tasks, maintain targets and match state, guard execution, and verify physical success. A successful search completes no physical objective. Robot-code integration is on hold.
 
-The production core is Java 17 with no WPILib, NetworkTables, PathPlanner or native dependency. Its adapter implements World-State `frc-planner/1`, pinned to local source commit `09553f637d9b687ebfc2fcdca7671c1af317b605`. The season-specific algae/barge demonstration is preserved in a separate historical source set and excluded from production jars.
+The production core is Java 17 with no WPILib, NetworkTables, PathPlanner or native dependency. Its adapter implements World-State `frc-planner/1`; its `PlannerBackend` source matches [public World-State revision `0e5b6c3`](https://github.com/Antigro09/FRC-World-State/tree/0e5b6c3f85d47205cde8b0c80e13fa79d35e95ab). The standalone build retains earlier support copies with exact hashes and differences documented in [API provenance](vendor/world-state-api-src/PROVENANCE.md). The season-specific algae/barge demonstration is preserved in a separate historical source set and excluded from production jars.
 
 ## Build and run
 

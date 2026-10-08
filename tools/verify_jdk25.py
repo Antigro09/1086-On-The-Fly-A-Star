@@ -24,7 +24,7 @@ FIXTURE_PINS = {
     "ObstacleEnvelopeBuilder.java": "8a07be95384fa2f519f01d9b4b678fc4cb3910d839b0b084d53a2443bf8188c4",
     "PlannerValidation.java": "5ab942113a6b0eac6674de11bb56b224f553f5516e46757706c642bc302b189c",
 }
-FIXTURE_SOURCE_COMMIT = "1f8b9aace3fd320e3545744e3125aa348089bc99"
+FIXTURE_SOURCE_COMMIT = "0e5b6c3f85d47205cde8b0c80e13fa79d35e95ab"
 
 
 def main():
@@ -117,7 +117,9 @@ def main():
     record = {
         "host": platform.platform(), "compiler": compiler, "runtime": runtime,
         "java_release": args.release, "bytecode_major": args.release + 44,
-        "contract": "frc-planner/1", "owner_source_commit": "09553f637d9b687ebfc2fcdca7671c1af317b605",
+        "contract": "frc-planner/1",
+        "api_export_source": {'repository': 'https://github.com/Antigro09/1086-On-The-Fly-A-Star', 'revision': '59ad897d895315a751df67c5751e30370850a784', 'path': 'vendor/world-state-api-src', 'note': 'Exact earlier owner exports compiled for this evidence; owner classes excluded from production jars.'},
+        "owner_public_source": {'repository': 'https://github.com/Antigro09/FRC-World-State', 'revision': '0e5b6c3f85d47205cde8b0c80e13fa79d35e95ab', 'exact_source_matches': ['PlannerBackend.java', 'ObstacleEnvelopeBuilder.java', 'PlannerValidation.java'], 'earlier_support_copies': ['Geometry.java', 'World.java'], 'note': 'See vendor/world-state-api-src/PROVENANCE.md for the two documented validation differences.'},
         "wpilib_runtime_classpath": [], "suite_output": suite, "smoke_output": smoke,
         "owner_integration_output": integration, "owner_fixture_sha256": FIXTURE_PINS,
         "owner_test_fixture_commit": FIXTURE_SOURCE_COMMIT,

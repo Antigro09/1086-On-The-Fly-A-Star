@@ -1,6 +1,6 @@
 # Test-only World-State integration exports
 
-World-State supplied these implementations for a direct cross-repository CPU adapter test on 2026-10-08. Files are exact, unmodified copies from its own source at `FRC-World-State/src/main/java/org/frcworldstate/core`, now committed as **`1f8b9aace3fd320e3545744e3125aa348089bc99`**. The hashes below pin the exact test inputs and match that owner commit. They are not a replacement schema. PlannerBackend `frc-planner/1` remains held at immutable API source pin `09553f637d9b687ebfc2fcdca7671c1af317b605`, unchanged in the newer owner implementation.
+Exact, unmodified implementations from [World-State public revision `0e5b6c3f85d47205cde8b0c80e13fa79d35e95ab`](https://github.com/Antigro09/FRC-World-State/tree/0e5b6c3f85d47205cde8b0c80e13fa79d35e95ab/src/main/java/org/frcworldstate/core) supply the direct CPU integration test. The hashes below match the public commit. `PlannerBackend.java` remains byte-identical to the held `frc-planner/1` export; [API provenance](../world-state-api-src/PROVENANCE.md) distinguishes earlier support copies from newer owner validation.
 
 | Exact owner source | SHA256 |
 | --- | --- |

@@ -23,7 +23,7 @@ The tested JDK25 path was `$JDK25_HOME`. No global install or another checkout m
 
 ## Direct owner-computed envelope test
 
-The integration test consumes exact owner implementations `ObstacleEnvelopeBuilder` and `PlannerValidation`, from World-State commit **`1f8b9aace3fd320e3545744e3125aa348089bc99`**, compiled here as test-only fixtures against the held API. [Fixture provenance](../vendor/world-state-test-fixtures-src/PROVENANCE.md) records hashes. Neither owner helper is included in production jars.
+The integration test consumes exact owner implementations `ObstacleEnvelopeBuilder` and `PlannerValidation`, from [public World-State revision **`0e5b6c3f85d47205cde8b0c80e13fa79d35e95ab`**](https://github.com/Antigro09/FRC-World-State/tree/0e5b6c3f85d47205cde8b0c80e13fa79d35e95ab), compiled here as test-only fixtures against the held API. [Fixture provenance](../vendor/world-state-test-fixtures-src/PROVENANCE.md) records hashes. Neither owner helper is included in production jars.
 
 A synthetic coasting track has physical radius0.3m, bounded motion1m/s, last measurement age0.2s, future request horizon0.2s, timing error0.02s, additional latency0.03s and two-sigma positional uncertainty0.2m. The owner builds a radius0.95m envelope anchored at the reconstructed measured center: `0.3 + 0.2 + 1 * (0.2 + 0.2 + 0.02 + 0.03)`. A* accepts that envelope, adds raw robot footprint/clearance once, and returns a detour with preserved IDs and null timed trajectory. The owner's independently implemented circle/segment validator accepts the complete returned geometry.
 
@@ -38,3 +38,7 @@ World-State's strict compile found three serialization lint warnings in internal
 No WPILib jars are present in either test runtime classpath, and production class-file inspection rejects WPILib/PathPlanner references or bundled owner/season classes. This proves this backend's empty WPILib dependency profile, rather than testing an invented 2027 adapter. Official alpha-7 artifact inspection is separate provenance evidence; it supplies no NT/native/controller execution claim.
 
 Controller deployment/native loading, timed following, actual robot integration, target latency/memory qualification and physical success remain unrun/on hold. **WPILib2026+Systemcore remains unsupported in the official matrix.** Java25 Mac execution does not change that status.
+
+## Public source reachability
+
+The same PlannerBackend and helper source hashes are now reachable at public owner revision `0e5b6c3f85d47205cde8b0c80e13fa79d35e95ab`. The held earlier `Geometry` and `World` support copies remain publicly reproducible in A* revision `59ad897d895315a751df67c5751e30370850a784`. [API provenance](../vendor/world-state-api-src/PROVENANCE.md) records the two validation differences; no tested source byte or artifact hash changed during this metadata update.

@@ -5,7 +5,6 @@
   "java_release": 17,
   "bytecode_major": 61,
   "contract": "frc-planner/1",
-  "owner_source_commit": "09553f637d9b687ebfc2fcdca7671c1af317b605",
   "wpilib_runtime_classpath": [],
   "suite_output": "PASS static obstacle and segment-safe simplification\nPASS conservative dynamic swept envelopes\nPASS narrow passage accepted/rejected by footprint\nPASS invalid/NaN/infinite input and map rejection\nPASS occupied/out-of-bounds start and goal\nPASS holonomic strafe/reverse, heading separate from travel\nPASS stationary and in-place rotation paths\nPASS start/end speed constraints remain geometry metadata\nPASS diagonal corner cutting and thin obstacle sweep\nPASS field edges and entire goal tolerance region\nPASS immutable static/dynamic snapshot\nPASS no path and bounded expansion/queues\nPASS monotonic timeout and cancellation polling\nPASS pinned adapter identities, clocks, geometry-only output\nPASS adapter velocities, obsolete/invalid budgets and cancellation\nPASS older solver cannot publish after newer request\nPASS disable/cancel/snapshot/pose/source invalidation\nPASS: 17 acceptance groups; CPU synthetic only; no hardware execution",
   "smoke_output": "SUCCESS; points=6; solver elapsed ns=15204584\nPose[x=0.8, y=1.8, headingRadians=0.0]\nPose[x=2.25, y=3.25, headingRadians=0.0]\nPose[x=3.1500000000000004, y=3.35, headingRadians=0.0]\nPose[x=3.75, y=3.25, headingRadians=0.0]\nPose[x=5.2, y=1.8, headingRadians=0.0]\nPose[x=5.2, y=1.8, headingRadians=1.5707963267948966]\nProposed geometry only. No motion duration, execution or physical objective completion.",
@@ -14,7 +13,7 @@
     "ObstacleEnvelopeBuilder.java": "8a07be95384fa2f519f01d9b4b678fc4cb3910d839b0b084d53a2443bf8188c4",
     "PlannerValidation.java": "5ab942113a6b0eac6674de11bb56b224f553f5516e46757706c642bc302b189c"
   },
-  "owner_test_fixture_commit": "1f8b9aace3fd320e3545744e3125aa348089bc99",
+  "owner_test_fixture_commit": "0e5b6c3f85d47205cde8b0c80e13fa79d35e95ab",
   "jdeps_output": "geometric-core.jar -> java.base\n   pathplanning.geometric                             -> java.lang                                          java.base\n   pathplanning.geometric                             -> java.lang.invoke                                   java.base\n   pathplanning.geometric                             -> java.lang.runtime                                  java.base\n   pathplanning.geometric                             -> java.util                                          java.base\n   pathplanning.geometric                             -> java.util.function                                 java.base\n   pathplanning.geometric                             -> pathplanning.geometric                             geometric-core.jar\nworld-state-adapter.jar -> $CHECKOUT/build/compatibility/jdk25-release17/geometric-core.jar\nworld-state-adapter.jar -> java.base\nworld-state-adapter.jar -> $CHECKOUT/build/compatibility/jdk25-release17/world-state-api.jar\n   pathplanning.backend                               -> java.lang                                          java.base\n   pathplanning.backend                               -> java.lang.invoke                                   java.base\n   pathplanning.backend                               -> java.lang.runtime                                  java.base\n   pathplanning.backend                               -> java.util                                          java.base\n   pathplanning.backend                               -> java.util.concurrent                               java.base\n   pathplanning.backend                               -> java.util.function                                 java.base\n   pathplanning.backend                               -> org.frcworldstate.core                             world-state-api.jar\n   pathplanning.backend                               -> pathplanning.backend                               world-state-adapter.jar\n   pathplanning.backend                               -> pathplanning.geometric                             geometric-core.jar\nworld-state-api.jar -> java.base\n   org.frcworldstate.core                             -> java.lang                                          java.base\n   org.frcworldstate.core                             -> java.lang.invoke                                   java.base\n   org.frcworldstate.core                             -> java.lang.runtime                                  java.base\n   org.frcworldstate.core                             -> java.util                                          java.base\n   org.frcworldstate.core                             -> java.util.function                                 java.base\n   org.frcworldstate.core                             -> java.util.stream                                   java.base\n   org.frcworldstate.core                             -> org.frcworldstate.core                             world-state-api.jar",
   "commands": [
     [
@@ -222,5 +221,25 @@
   "path_normalization": {
     "$JDK25_HOME": "explicit verified JDK25 installation",
     "$CHECKOUT": "repository checkout; private absolute paths removed for publication"
+  },
+  "api_export_source": {
+    "repository": "https://github.com/Antigro09/1086-On-The-Fly-A-Star",
+    "revision": "59ad897d895315a751df67c5751e30370850a784",
+    "path": "vendor/world-state-api-src",
+    "note": "Exact earlier owner exports compiled for this evidence; owner classes excluded from production jars."
+  },
+  "owner_public_source": {
+    "repository": "https://github.com/Antigro09/FRC-World-State",
+    "revision": "0e5b6c3f85d47205cde8b0c80e13fa79d35e95ab",
+    "exact_source_matches": [
+      "PlannerBackend.java",
+      "ObstacleEnvelopeBuilder.java",
+      "PlannerValidation.java"
+    ],
+    "earlier_support_copies": [
+      "Geometry.java",
+      "World.java"
+    ],
+    "note": "See vendor/world-state-api-src/PROVENANCE.md for the two documented validation differences."
   }
 }
