@@ -40,6 +40,17 @@ sourceSets {
         compileClasspath += sourceSets.main.output
         runtimeClasspath += sourceSets.main.output
     }
+    benchmark {
+        java.srcDir 'src/benchmark/java'
+        compileClasspath += sourceSets.main.output + sourceSets.worldStateAdapter.output
+        runtimeClasspath += sourceSets.main.output + sourceSets.worldStateAdapter.output
+    }
+    dashboard {
+        java.srcDir 'src/dashboard/java'
+        resources.setSrcDirs(['src/dashboard/resources', 'fixtures'])
+        compileClasspath += sourceSets.main.output + sourceSets.worldStateAdapter.output
+        runtimeClasspath += sourceSets.main.output + sourceSets.worldStateAdapter.output
+    }
     contractTest {
         java.srcDir 'src/contractTest/java'
         compileClasspath += sourceSets.main.output + sourceSets.worldStateAdapter.output
@@ -104,6 +115,9 @@ dependencies {
     testImplementation effectiveApiJar
     contractTestImplementation effectiveApiJar
     worldStateIntegrationTestImplementation effectiveApiJar
+    benchmarkImplementation effectiveApiJar
+    dashboardImplementation effectiveApiJar
+    dashboardImplementation 'com.fasterxml.jackson.core:jackson-databind:2.17.2'
 
     testImplementation platform('org.junit:junit-bom:5.10.1')
     testImplementation 'org.junit.jupiter:junit-jupiter'
@@ -142,6 +156,56 @@ tasks.register('contractCheck', JavaExec) {
     classpath = sourceSets.contractTest.runtimeClasspath
     mainClass = 'pathplanning.geometric.ContractSuite'
     maxHeapSize = '128m'
+}
+
+tasks.register('plannerBenchmark', JavaExec) {
+    group = 'verification'
+    description = 'Opt-in bounded CPU-only development-host benchmark; not a controller qualification.'
+    dependsOn tasks.named('benchmarkClasses')
+    classpath = sourceSets.benchmark.runtimeClasspath
+    mainClass = 'pathplanning.benchmark.PlannerBenchmark'
+    maxHeapSize = '128m'
+    if (project.hasProperty('benchmarkArgs')) args(project.property('benchmarkArgs').toString().split(' '))
+}
+
+tasks.register('runDashboard', JavaExec) {
+    group = 'application'
+    description = 'Run the loopback-only offline 2D planner dashboard; no robot topics or actuators.'
+    dependsOn tasks.named('dashboardClasses')
+    classpath = sourceSets.dashboard.runtimeClasspath
+    mainClass = 'pathplanning.dashboard.DashboardServer'
+    maxHeapSize = '128m'
+    args '--port', (project.findProperty('dashboardPort') ?: '8086').toString()
+}
+
+tasks.register('dashboardContractCheck', JavaExec) {
+    group = 'verification'
+    description = 'Opt-in bounded desktop dashboard protocol and image-map checks.'
+    dependsOn tasks.named('dashboardClasses')
+    classpath = sourceSets.dashboard.runtimeClasspath
+    mainClass = 'pathplanning.dashboard.DashboardContractSuite'
+    maxHeapSize = '128m'
+}
+
+tasks.register('dashboardHttpCheck', JavaExec) {
+    group = 'verification'
+    description = 'Opt-in loopback-only desktop HTTP isolation and request-bound checks.'
+    dependsOn tasks.named('dashboardClasses')
+    classpath = sourceSets.dashboard.runtimeClasspath
+    mainClass = 'pathplanning.dashboard.DashboardHttpSuite'
+    maxHeapSize = '128m'
+}
+
+tasks.register('dashboardMockProducer', JavaExec) {
+    group = 'application'
+    description = 'Send a bounded synthetic display recording only to the local dashboard.'
+    dependsOn tasks.named('dashboardClasses')
+    classpath = sourceSets.dashboard.runtimeClasspath
+    mainClass = 'pathplanning.dashboard.SyntheticMockProducer'
+    maxHeapSize = '128m'
+    args '--port', (project.findProperty('dashboardPort') ?: '8086').toString(),
+            '--frames', (project.findProperty('mockFrames') ?: '10').toString(),
+            '--interval-ms', (project.findProperty('mockIntervalMs') ?: '200').toString()
 }
 
 tasks.register('worldStateIntegrationCheck', JavaExec) {

@@ -4,3 +4,7 @@ build/
 out/
 *.class
 .DS_Store
+
+# Keep generated measurements, browser observations and capture manifests local.
+docs/evidence/mac-benchmark/
+docs/evidence/dashboard/

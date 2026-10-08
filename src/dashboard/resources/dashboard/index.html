@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>A* Field Lab · Local planner</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <header class="masthead">
+    <div class="brand"><span class="brand-mark" aria-hidden="true">A<span>*</span></span><div><p class="eyebrow">LOCAL GEOMETRY WORKBENCH</p><h1>Field Lab</h1></div></div>
+    <div class="header-note"><span class="local-indicator"></span><span id="host-label">LOOPBACK ONLY</span><span class="version">frc-planner/1</span></div>
+  </header>
+
+  <nav class="mode-bar" aria-label="Dashboard mode">
+    <div class="mode-tabs" role="tablist" aria-label="Mode">
+      <button type="button" class="mode-tab active" role="tab" aria-selected="true" data-mode="sandbox">01 <span>Sandbox</span></button>
+      <button type="button" class="mode-tab" role="tab" aria-selected="false" data-mode="replay">02 <span>Replay</span></button>
+      <button type="button" class="mode-tab" role="tab" aria-selected="false" data-mode="live">03 <span>Live · read only</span></button>
+    </div>
+    <p id="mode-description">Edit synthetic geometry. Plan locally. Preview a simple kinematic follower.</p>
+  </nav>
+
+  <main class="workspace">
+    <section class="field-panel" aria-label="Field visualization">
+      <div class="field-heading"><div><span id="source-badge" class="source-badge">SYNTHETIC</span><h2 id="field-title">8 × 4 m laboratory</h2><p id="field-subtitle">Generic test space · not official FRC field geometry</p></div><button type="button" id="fit-view" class="quiet-button">Fit view ↗</button></div>
+      <div class="canvas-toolbar"><div class="tool-group" aria-label="Canvas edit tool"><button type="button" data-tool="inspect" class="tool active">Drag / inspect</button><button type="button" data-tool="start" class="tool">Place start</button><button type="button" data-tool="goal" class="tool">Place goal</button><button type="button" data-tool="obstacle" class="tool">Add circle</button></div><label class="toggle small"><input id="show-envelopes" type="checkbox" checked> Safety envelopes</label></div>
+      <div class="canvas-wrap"><canvas id="field-canvas" aria-label="Two-dimensional field in meters. Drag start, goal, or circles in sandbox mode." tabindex="0">The field visualization requires Canvas support.</canvas><div id="canvas-caption" class="canvas-caption">BLUE_FIELD · +x down field · +y left · CCW heading</div></div>
+      <div class="legend"><span><i class="legend-start"></i>Start / robot</span><span><i class="legend-goal"></i>Goal + tolerance</span><span><i class="legend-path"></i>Geometric proposal</span><span><i class="legend-envelope"></i>Raw occupancy envelope</span></div>
+      <div class="metric-strip"><div><span class="metric-label">PLAN STATUS</span><strong id="plan-status">CONNECTING</strong></div><div><span class="metric-label">SOLVER TIME</span><strong id="solver-time">—</strong></div><div><span class="metric-label">PATH LENGTH</span><strong id="path-length">—</strong></div><div><span class="metric-label">VALIDITY</span><strong id="validity">—</strong></div></div>
+      <div id="status-banner" class="status-banner" role="status">Connecting to the local planner…</div>
+
+      <section id="replay-controls" class="replay-card" hidden>
+        <div class="section-title"><h3>Recorded frames</h3><span id="replay-position" class="mono">0 / 0</span></div>
+        <div class="playback-row"><button type="button" id="replay-play" class="primary-button">Play replay</button><button type="button" id="replay-step" class="quiet-button">Step →</button><button type="button" id="replay-reset" class="quiet-button">↺ First frame</button><label>Frame delay <select id="replay-delay"><option value="1000">1 s</option><option value="500" selected>0.5 s</option><option value="250">0.25 s</option></select></label></div>
+        <input id="replay-timeline" type="range" min="0" max="0" value="0" aria-label="Replay frame">
+        <p class="help">Deterministic recorded frames. Playback does not call the planner or turn recorded paths into current authority.</p>
+      </section>
+      <section id="preview-controls" class="preview-card">
+        <div class="section-title"><h3>Kinematic preview <span class="small-label">OFFLINE ONLY</span></h3><span id="preview-state" class="mono">Ready after a successful plan</span></div>
+        <div class="playback-row"><button type="button" id="preview-play" class="primary-button" disabled>Play preview</button><button type="button" id="preview-reset" class="quiet-button">↺ Reset</button><label>Speed <input id="preview-speed" type="number" min="0.05" max="4" step="0.1" value="0.8"><span>m/s</span></label><label>Acceleration <input id="preview-acceleration" type="number" min="0.05" max="8" step="0.1" value="0.8"><span>m/s²</span></label></div>
+        <progress id="preview-progress" max="1" value="0" aria-label="Preview progress"></progress>
+        <p class="help">Stops at each corner, then rotates to the next heading. Conservative footprint checks each step. No drivetrain physics, timed planner trajectory, or hardware execution.</p>
+      </section>
+    </section>
+
+    <aside class="inspector">
+      <section id="sandbox-controls" class="control-card">
+        <div class="section-title"><h2>Scenario</h2><span class="small-label">SYNTHETIC INPUTS</span></div>
+        <div class="action-row"><button type="button" id="plan-button" class="primary-button">Plan path <span aria-hidden="true">→</span></button><button type="button" id="cancel-button" class="danger-button">Cancel</button></div>
+        <label class="toggle"><input type="checkbox" id="auto-replan" checked> Replan after an edit</label>
+        <p class="help">Drag markers and circles, or set their metric coordinates below. A found path completes no physical task.</p>
+        <div class="pose-grid"><fieldset><legend><i class="legend-start"></i> Start</legend><label>X <input id="start-x" type="number" step="0.1" data-edit="start.x_m"><span>m</span></label><label>Y <input id="start-y" type="number" step="0.1" data-edit="start.y_m"><span>m</span></label><label>Heading <input id="start-heading" type="number" step="5" data-edit="start.heading_rad" data-degrees><span>°</span></label></fieldset><fieldset><legend><i class="legend-goal"></i> Goal</legend><label>X <input id="goal-x" type="number" step="0.1" data-edit="goal.x_m"><span>m</span></label><label>Y <input id="goal-y" type="number" step="0.1" data-edit="goal.y_m"><span>m</span></label><label>Heading <input id="goal-heading" type="number" step="5" data-edit="goal.heading_rad" data-degrees><span>°</span></label></fieldset></div>
+        <details open><summary>Robot footprint &amp; field</summary><div class="input-grid"><label>Length <input id="robot-length" type="number" min="0.05" step="0.05" data-edit="footprint.length_m"><span>m</span></label><label>Width <input id="robot-width" type="number" min="0.05" step="0.05" data-edit="footprint.width_m"><span>m</span></label><label>Field width <input id="field-width" type="number" min="1" max="100" step="0.5" data-bound="width"><span>m</span></label><label>Field height <input id="field-height" type="number" min="1" max="100" step="0.5" data-bound="height"><span>m</span></label></div><p class="help">Collision disk = half the footprint diagonal + backend clearance. Holonomic heading is separate from travel direction.</p></details>
+        <details><summary>Planner constraints</summary><div class="input-grid"><label>Max speed <input id="max-speed" type="number" min="0.1" step="0.1" data-edit="constraints.max_speed_mps"><span>m/s</span></label><label>Max acceleration <input id="max-acceleration" type="number" min="0.1" step="0.1" data-edit="constraints.max_acceleration_mps2"><span>m/s²</span></label><label>Max rotation <input id="max-angular" type="number" min="0.1" step="0.1" data-edit="constraints.max_angular_speed_radps"><span>rad/s</span></label><label>Goal tolerance <input id="goal-tolerance" type="number" min="0" step="0.01" data-edit="goal.position_tolerance_m"><span>m</span></label></div></details>
+        <div class="section-title obstacle-heading"><h3>Occupancy circles</h3><button type="button" id="add-obstacle" class="quiet-button">+ Add</button></div><div id="obstacle-list" class="obstacle-list"></div>
+        <div class="file-actions"><button type="button" id="reset-scenario" class="quiet-button">↺ Sample</button><button type="button" id="export-scenario" class="quiet-button">Export</button><button type="button" id="import-scenario" class="quiet-button">Import</button><input id="scenario-file" type="file" accept="application/json,.json" hidden></div>
+      </section>
+      <section id="live-controls" class="control-card" hidden><div class="section-title"><h2>Live observer</h2><span class="small-label">READ ONLY</span></div><p id="connection-status" class="connection-status">Waiting for local telemetry</p><dl class="diagnostic-list"><dt>Arrival age</dt><dd id="connection-age">—</dd><dt>Source / session</dt><dd id="source-session">—</dd><dt>Source sequence</dt><dd id="source-sequence">—</dd><dt>Real feed</dt><dd id="real-feed">Not implemented</dd></dl><button type="button" id="refresh-live" class="quiet-button">Refresh connection</button><p class="help">Shipped sources are local synthetic mocks. No live goal edits, planner requests, ingest calls, NT publication, or execution controls.</p></section>
+      <section id="replay-inspector" class="control-card" hidden><div class="section-title"><h2>Replay source</h2><span class="small-label">RECORDED</span></div><p class="help">The built-in sample contains recorded synthetic frames. Import a bounded dashboard replay file to inspect another recording.</p><div class="file-actions"><button type="button" id="import-replay" class="quiet-button">Import replay</button><input id="replay-file" type="file" accept="application/json,.json" hidden></div></section>
+      <section class="control-card context-card"><div class="section-title"><h3>Planning context</h3><span class="context-dot" aria-hidden="true"></span></div><dl class="diagnostic-list"><dt>Request</dt><dd id="request-id">—</dd><dt>Epoch / snapshot</dt><dd id="context-identity">—</dd><dt>Obstacle map</dt><dd id="map-version">—</dd><dt>Backend</dt><dd id="backend-id">—</dd><dt>Field map</dt><dd id="map-identity">Synthetic laboratory</dd></dl></section>
+      <section id="field-import-panel" class="control-card"><div class="section-title"><h3>Field image &amp; geometry</h3><span class="small-label">SANDBOX ONLY</span></div><p class="help">Import module loading. Image calibration and reviewed physical geometry remain isolated from live telemetry.</p></section>
+    </aside>
+  </main>
+  <footer class="page-footer"><span>A* FIELD LAB / CPU LOCAL</span><span>Geometric proposals · no motor authority · robot integration on hold</span></footer>
+</body>
+</html>

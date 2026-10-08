@@ -52,3 +52,55 @@ No hardware operation or large training was performed.
 ## Java25 and direct World-State integration follow-up
 
 Strict JDK17 and JDK25 builds passed all **17 acceptance groups** and **20 owner-envelope/adapter/owner-validator checks**. The JDK25 runs packaged and executed both release17 and release25 bytecode; production dependencies are only `java.base`, the core and World-State's API. The final JDK17 Gradle command `./gradlew --offline --no-daemon --max-workers=1 --gradle-user-home ../.gradle-user build worldStateAdapterJar run` also passed both suites and the smoke example. [Follow-up validation](jdk25-validation.md) records exact profiles, commands, owner commit/hashes and raw results. It supersedes any earlier Java25-unrun status.
+
+## Local desktop and measured optimization follow-up
+
+The separate local branch `codex/mac-benchmark-browser-plan` adds a bounded
+desktop dashboard and opt-in benchmark harness. Robot integration was not
+performed. Device identification and bounded warmed measurements now appear
+in [Mac performance](mac-performance.md), with a published portable command
+transcript and locally retained, unpublished raw CSV/JSON under ignored
+`docs/evidence/mac-benchmark/`. The measured immutable empty-static-grid shortcut
+retains dynamic envelopes, field edges and cancellation. Its regression raises
+the current acceptance count to **18**; prior 17-group evidence remains historical.
+
+The current JDK17 Gradle build passed 18 acceptance groups, 20 direct owner-envelope/
+adapter/owner-validator checks, 30 desktop model checks and 12 loopback HTTP checks:
+
+```sh
+./gradlew --offline --no-daemon --max-workers=1 --gradle-user-home ../.gradle-user \
+  build worldStateAdapterJar dashboardContractCheck dashboardHttpCheck
+node fixtures/field-map/test-field-map.mjs
+node fixtures/dashboard/test-scenario-import.mjs
+node --check src/dashboard/resources/dashboard/app.js
+node --check src/dashboard/resources/dashboard/field-import.js
+```
+
+Node 24.14.0 passed **58 field-map checks**, eight actual-handler async import
+regressions and both syntax checks. Strict standalone
+Java17 compilation with `-Xlint:all -Werror` passed for the core/adapter/benchmark;
+desktop Java17 `-Xlint:all` compilation produced no warnings. Production jar
+inventories contain no dashboard, Jackson, historical demo or HTTP-server classes.
+
+The current common release-17 artifact was also freshly compiled/packaged and
+executed on the explicitly selected Temurin25.0.4.1+1 using
+`python3 tools/verify_jdk25.py --java-home "$JDK25_HOME" --release 17`.
+All 18 groups, 20 owner checks, the smoke example, bytecode and dependency checks
+passed. Current source hashes and results are retained in
+the locally retained, unpublished `docs/evidence/dashboard/jdk25-current.json`.
+The earlier separate release-25
+bytecode report covers its earlier 17-group source; no native/controller claim
+follows from either host check. Review caught the verification script's stale
+17-group assertion; it now requires the current 18-group summary and rejects
+desktop/Jackson/HTTP dependencies in production artifacts.
+
+Actual local Chromium checks and screenshots are described in
+[desktop browser evidence](dashboard-validation.md). These include a
+real backend proposal in Sandbox, synthetic replay and mock-only Live, plus
+reviewed affine image-map import. Custom-Vision independently consumed the same
+golden map/raster/digest in its local field viewer and reported 18 scene checks
+and 34 actual Chromium checks; its controller/perception behavior was unchanged.
+
+Real NetworkTables telemetry, official field geometry/calibration accuracy,
+drivetrain simulation, controller/native loading, combined robot-stack latency,
+hardware operations and physical success remain unrun. No controller benchmark batch was run.

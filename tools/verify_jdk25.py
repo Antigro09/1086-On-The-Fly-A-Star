@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compile/package/run the unchanged CPU acceptance suite using an explicit JDK25.
+"""Compile/package/run the current CPU acceptance suite using an explicit JDK25.
 
 No download, native WPILib, NetworkTables server, robot controller or global install.
 All generated outputs stay in this checkout's ignored build directory.
@@ -93,15 +93,15 @@ def main():
                 if struct.unpack(">H", data[6:8])[0] != args.release + 44:
                     raise ValueError(f"Unexpected bytecode release: {entry}")
                 if name in ("geometric-core", "world-state-adapter") and (
-                    entry.startswith(("org/wpilib/", "edu/wpi/", "org/frcworldstate/", "pathplanning/control/"))
-                    or b"org/wpilib/" in data or b"edu/wpi/" in data or b"com/pathplanner/" in data
+                    entry.startswith(("org/wpilib/", "edu/wpi/", "org/frcworldstate/", "pathplanning/control/", "pathplanning/dashboard/"))
+                    or any(marker in data for marker in (b"org/wpilib/", b"edu/wpi/", b"com/pathplanner/", b"com/fasterxml/jackson/", b"com/sun/net/httpserver/"))
                 ):
                     raise ValueError(f"Production boundary leaked WPILib/owner/season classes: {entry}")
 
     classpath = ":".join(str(jars[g[0]]) for g in groups)
     suite = run([home / "bin" / "java", "-Xmx128m", "-cp", classpath,
                  "pathplanning.geometric.ContractSuite"])
-    if "PASS: 17 acceptance groups" not in suite:
+    if "PASS: 18 acceptance groups" not in suite:
         raise ValueError("Acceptance-suite summary changed")
     integration = run([home / "bin" / "java", "-Xmx128m", "-cp", classpath,
                        "pathplanning.backend.WorldStateEnvelopeIntegrationSuite"])
@@ -121,6 +121,8 @@ def main():
         "api_export_source": {'repository': 'https://github.com/Antigro09/1086-On-The-Fly-A-Star', 'revision': '59ad897d895315a751df67c5751e30370850a784', 'path': 'vendor/world-state-api-src', 'note': 'Exact earlier owner exports compiled for this evidence; owner classes excluded from production jars.'},
         "owner_public_source": {'repository': 'https://github.com/Antigro09/FRC-World-State', 'revision': '0e5b6c3f85d47205cde8b0c80e13fa79d35e95ab', 'exact_source_matches': ['PlannerBackend.java', 'ObstacleEnvelopeBuilder.java', 'PlannerValidation.java'], 'earlier_support_copies': ['Geometry.java', 'World.java'], 'note': 'See vendor/world-state-api-src/PROVENANCE.md for the two documented validation differences.'},
         "wpilib_runtime_classpath": [], "suite_output": suite, "smoke_output": smoke,
+        "compiled_source_sha256": {str(path.relative_to(ROOT)): hashlib.sha256(path.read_bytes()).hexdigest()
+                                   for path in sorted({path for _, source_files, _ in groups for path in source_files})},
         "owner_integration_output": integration, "owner_fixture_sha256": FIXTURE_PINS,
         "owner_test_fixture_commit": FIXTURE_SOURCE_COMMIT,
         "jdeps_output": dependencies, "commands": commands,
