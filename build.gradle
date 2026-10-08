@@ -1,42 +1,184 @@
+// Modified 2026-10-08: pure Java core, isolated historical demo, pinned World-State tests.
 plugins {
     id 'java'
     id 'application'
 }
 
 group = 'com.antigro'
-version = '0.1.0'
+version = '0.2.0'
 
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(21)
+        languageVersion = JavaLanguageVersion.of(17)
     }
 }
 
 application {
     mainClass.set(
-        (project.findProperty('mainClass') ?: 'pathplanning.integration.OnTheFlyPlannerMain') as String
+        (project.findProperty('mainClass') ?: 'pathplanning.geometric.PlannerSmokeExample') as String
     )
 }
 
 repositories {
     mavenCentral()
     maven {
-        url = uri('https://frcmaven.wpi.edu/artifactory/release')
+        url = uri('https://frcmaven.wpi.edu/artifactory/api/download/release')
     }
 }
 
+// The default application and jar contain only the controller-independent geometric core.
+// The old season demo is available for historical comparison, never on the main classpath.
+sourceSets {
+    historicalDemo {
+        java.srcDir 'src/historicalDemo/java'
+    }
+    pinnedWorldStateApi {
+        java.srcDir 'vendor/world-state-api-src'
+    }
+    worldStateAdapter {
+        java.srcDir 'src/worldStateAdapter/java'
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += sourceSets.main.output
+    }
+    contractTest {
+        java.srcDir 'src/contractTest/java'
+        compileClasspath += sourceSets.main.output + sourceSets.worldStateAdapter.output
+        runtimeClasspath += sourceSets.main.output + sourceSets.worldStateAdapter.output
+    }
+    worldStateIntegrationTest {
+        java.srcDir 'src/integrationTest/java'
+        java.srcDir 'vendor/world-state-test-fixtures-src'
+        compileClasspath += sourceSets.main.output + sourceSets.worldStateAdapter.output
+        runtimeClasspath += sourceSets.main.output + sourceSets.worldStateAdapter.output
+    }
+}
+
+def worldStateApiJar = providers.gradleProperty('worldStateApiJar')
+def wpilib2026 = '2026.2.2'
+
+tasks.register('verifyWorldStateApiPin') {
+    group = 'verification'
+    description = 'Fail before compile if the owner API source or explicitly pinned external artifact changed.'
+    doLast {
+        def sourceHashes = [
+            'PlannerBackend.java': '5f6c6e709516c522c2bfc765e8d7a241c274cb4ac1d2e1d03e5d0599980665aa',
+            'Geometry.java': 'e94a4b1ce2d245dbdddda03fb25c6d7be77aeeedf62b831804d5311984f1bdc2',
+            'World.java': 'e1dbc25da7c754959067b628016663cf0799c4d32e29974a78db4e94129d494a'
+        ]
+        sourceHashes.each { name, expected ->
+            def sourceFile = file("vendor/world-state-api-src/org/frcworldstate/core/${name}")
+            if (!sourceFile.isFile() || java.security.MessageDigest.getInstance('SHA-256').digest(sourceFile.bytes).encodeHex().toString() != expected)
+                throw new GradleException("Owner API source pin differs: ${name}. Coordinate an API migration with World-State.")
+        }
+        if (worldStateApiJar.isPresent()) {
+            def artifact = file(worldStateApiJar.get())
+            def expected = providers.gradleProperty('worldStateApiSha256').orNull
+            if (!artifact.isFile() || expected == null || java.security.MessageDigest.getInstance('SHA-256').digest(artifact.bytes).encodeHex().toString() != expected)
+                throw new GradleException('External World-State API requires an existing jar and matching -PworldStateApiSha256; record its source pin.')
+        }
+    }
+}
+
+tasks.named('compilePinnedWorldStateApiJava') { dependsOn tasks.named('verifyWorldStateApiPin') }
+
+tasks.register('pinnedWorldStateApiJar', Jar) {
+    group = 'build'
+    description = 'Build the exact pinned World-State API source; see vendor provenance.'
+    dependsOn tasks.named('pinnedWorldStateApiClasses')
+    archiveFileName = 'frc-world-state-api-1.jar'
+    from sourceSets.pinnedWorldStateApi.output
+}
+
+def effectiveApiJar = worldStateApiJar.isPresent() ? files(worldStateApiJar.get()) : files(tasks.named('pinnedWorldStateApiJar'))
+
 dependencies {
-    implementation 'edu.wpi.first.wpimath:wpimath-java:2024.3.2'
-    implementation 'edu.wpi.first.ntcore:ntcore-java:2024.3.2'
-    implementation 'edu.wpi.first.wpiunits:wpiunits-java:2024.3.2'
-    implementation 'edu.wpi.first.wpiutil:wpiutil-java:2024.3.2'
-    implementation 'org.ejml:ejml-simple:0.43'
-    implementation 'com.fasterxml.jackson.core:jackson-databind:2.17.2'
-    implementation 'com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:2.17.2'
-    implementation 'us.hebi.quickbuf:quickbuf-runtime:1.4'
+    historicalDemoImplementation "edu.wpi.first.wpimath:wpimath-java:${wpilib2026}"
+    historicalDemoImplementation "edu.wpi.first.wpiunits:wpiunits-java:${wpilib2026}"
+    historicalDemoImplementation "edu.wpi.first.wpiutil:wpiutil-java:${wpilib2026}"
+    historicalDemoImplementation 'org.ejml:ejml-simple:0.43.1'
+    historicalDemoImplementation 'com.fasterxml.jackson.core:jackson-databind:2.17.2'
+    historicalDemoImplementation 'com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:2.17.2'
+    historicalDemoImplementation 'us.hebi.quickbuf:quickbuf-runtime:1.4'
+
+    worldStateAdapterCompileOnly effectiveApiJar
+    testImplementation effectiveApiJar
+    contractTestImplementation effectiveApiJar
+    worldStateIntegrationTestImplementation effectiveApiJar
 
     testImplementation platform('org.junit:junit-bom:5.10.1')
     testImplementation 'org.junit.jupiter:junit-jupiter'
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.release = 17
+    options.encoding = 'UTF-8'
+}
+
+tasks.named('compileWorldStateAdapterJava') {
+    dependsOn tasks.named('verifyWorldStateApiPin')
+    doFirst {
+        if (worldStateApiJar.isPresent() && !file(worldStateApiJar.get()).isFile()) {
+            throw new GradleException('worldStateApiJar must name the pinned World-State API jar. Do not substitute a local contract.')
+        }
+        if (!worldStateApiJar.isPresent() && fileTree('vendor/world-state-api-src').matching { include '**/*.java' }.isEmpty()) {
+            throw new GradleException('The pinned World-State API source is missing. Restore the recorded source pin before compiling this adapter.')
+        }
+    }
+}
+
+tasks.register('worldStateAdapterJar', Jar) {
+    group = 'build'
+    description = 'Build the core plus its World-State adapter; requires the pinned API jar.'
+    dependsOn tasks.named('worldStateAdapterClasses')
+    archiveClassifier = 'world-state-adapter'
+    from sourceSets.main.output
+    from sourceSets.worldStateAdapter.output
+}
+
+tasks.register('contractCheck', JavaExec) {
+    group = 'verification'
+    description = 'Run the bounded CPU contract suite against the pinned API.'
+    dependsOn tasks.named('contractTestClasses')
+    classpath = sourceSets.contractTest.runtimeClasspath
+    mainClass = 'pathplanning.geometric.ContractSuite'
+    maxHeapSize = '128m'
+}
+
+tasks.register('worldStateIntegrationCheck', JavaExec) {
+    group = 'verification'
+    description = 'Run owner-computed obstacle envelopes through this adapter and the owner validator.'
+    dependsOn tasks.named('worldStateIntegrationTestClasses')
+    classpath = sourceSets.worldStateIntegrationTest.runtimeClasspath
+    mainClass = 'pathplanning.backend.WorldStateEnvelopeIntegrationSuite'
+    maxHeapSize = '128m'
+}
+
+tasks.named('check') {
+    dependsOn tasks.named('contractCheck')
+    dependsOn tasks.named('worldStateIntegrationCheck')
+}
+
+tasks.register('verifyWorldStateTestFixturePin') {
+    doLast {
+        def pins = [
+            'ObstacleEnvelopeBuilder.java': '8a07be95384fa2f519f01d9b4b678fc4cb3910d839b0b084d53a2443bf8188c4',
+            'PlannerValidation.java': '5ab942113a6b0eac6674de11bb56b224f553f5516e46757706c642bc302b189c'
+        ]
+        pins.each { name, expected ->
+            def sourceFile = file("vendor/world-state-test-fixtures-src/org/frcworldstate/core/${name}")
+            if (!sourceFile.isFile() || java.security.MessageDigest.getInstance('SHA-256').digest(sourceFile.bytes).encodeHex().toString() != expected)
+                throw new GradleException("World-State test-only export differs: ${name}")
+        }
+    }
+}
+tasks.named('compileWorldStateIntegrationTestJava') { dependsOn tasks.named('verifyWorldStateTestFixturePin') }
+
+tasks.register('runHistoricalDemo', JavaExec) {
+    group = 'application'
+    description = 'Run the isolated WPILib 2026 synthetic historical demo. Does not execute a robot.'
+    dependsOn tasks.named('historicalDemoClasses')
+    classpath = sourceSets.historicalDemo.runtimeClasspath
+    mainClass = (project.findProperty('historicalMainClass') ?: 'pathplanning.examples.HybridPlannerExample') as String
 }
 
 tasks.withType(Test).configureEach {
