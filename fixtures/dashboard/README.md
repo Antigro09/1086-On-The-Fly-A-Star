@@ -1,5 +1,5 @@
-These are tiny authored SYNTHETIC display fixtures, not robot logs or solver
-measurements. `python3 fixtures/dashboard/generate-fixtures.py` reproduces them
+The telemetry/replay files are tiny authored SYNTHETIC display fixtures, not
+robot logs or solver measurements. `python3 fixtures/dashboard/generate-fixtures.py` reproduces those two files
 without external packages, planning, network calls or hardware.
 
 `synthetic-telemetry.json` is accepted by the CLI-only live ingest endpoint when
@@ -23,3 +23,12 @@ validators with controlled asynchronous file reads. Eight checks cover a valid
 typed import, switching to Live/Replay, leaving and returning to Sandbox, newer
 edits/imports, and current versus obsolete invalid JSON. The test does not start
 a browser, server, planner, benchmark, or hardware connection.
+# Dense curve course
+
+`curve-gauntlet.json` is a deterministic 12×6 m synthetic Sandbox scenario with
+26 raw obstacle circles, a 0.6×0.6 m robot and a route requiring alternating
+detours. Load it through **Import scenario**, then Plan. Its supplied geometry is
+not an official game field or a physical measurement. The same course is covered
+by `CurvedMotionIntegrationSuite` so tiny corner fillets cannot satisfy the new
+whole-route geometry regression. [Results and limits](../../docs/curved-motion.md)
+describe actual curve certification, continuous curvature and timed motion.

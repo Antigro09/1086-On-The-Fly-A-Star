@@ -3,7 +3,7 @@
 The later [curved-motion validation](curved-motion.md) supersedes this historical
 implementation's time-parameterization-unrun status. The owner geometric SPI
 remains unchanged; optional Bézier geometry and point-mass timing now pass
-32,331 curve assertions, 16 timing groups and 263 integration checks on JDK17
+37,019 curve assertions, nine spline groups, 16 timing groups and 5,345 integration checks on JDK17
 and JDK25 with release-17 bytecode. Current desktop checks pass 35 model and
 12 HTTP cases, plus 13 JavaScript motion-preview checks. Following, physical
 drivetrain qualification and controller timing remain unrun.

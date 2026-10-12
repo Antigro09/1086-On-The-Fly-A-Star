@@ -20,7 +20,7 @@ public final class BezierSuite {
     private static final Runnable POLL=()->{};
     private BezierSuite() {}
     public static void main(String[] args) {
-        defaultRoute(); openCorner(); cornerObstacle(); edgeAndStatic(); stationaryAndDirections(); invalid(); cancelAndBounds(); streamingCandidates(); convertedGeometry();
+        defaultRoute(); openCorner(); cornerObstacle(); edgeAndStatic(); stationaryAndDirections(); invalid(); cancelAndBounds(); streamingCandidates(); convertedGeometry(); exactControls();
         System.out.println("BezierSuite: "+checks+" checks passed");
     }
     private static MapSnapshot map(double width,double height,List<Envelope> obstacles) {
@@ -155,6 +155,32 @@ public final class BezierSuite {
         require(propagated,"revalidation preserves cancellation/budget poll exceptions");
     }
     private static Pose roundtrip(Pose p,double ox,double oy){return new Pose((p.x()+ox)-ox,(p.y()+oy)-oy,p.headingRadians());}
+    private static void exactControls() {
+        List<Bezier> controls=List.of(new Bezier(p(1,3),p(2,5),p(3,5),p(4,3)),
+                new Bezier(p(4,3),p(5,1),p(6,1),p(7,3)),new Bezier(p(7,3),p(8,5),p(9,5),p(10,3)));
+        MapSnapshot map=map(12,6,List.of(obstacle("first-broad-bend",2.1,2.7,2.9,3.3),
+                obstacle("middle-broad-bend",5.1,2.7,5.9,3.3),obstacle("last-broad-bend",8.1,2.7,8.9,3.3)));
+        Curve certified=BezierSmoother.certify(controls,map,.3,POLL);
+        require(certified!=null&&certified.segments().equals(controls),"global broad S controls certified exactly without seed-corner trimming");
+        require(certified.knots().stream().noneMatch(Knot::stop),"actual C1 broad spline joins do not force stops");
+        require(certified.segments().get(0).at(.5).y()>4.4,"certified bend has substantial deviation across a whole segment");
+        verify(certified,map,.3,controls.get(0).p0(),controls.get(2).p3());
+        List<Bezier> unsafe=new ArrayList<>(controls);unsafe.set(0,new Bezier(p(1,3),p(2,3),p(3,3),p(4,3)));
+        require(BezierSmoother.certify(unsafe,map,.3,POLL)==null,"unsafe global control polygon rejected by complete swept footprint certificate");
+        Bezier horizontal=new Bezier(p(1,1),p(2,1),p(3,1),p(4,1));
+        Bezier vertical=new Bezier(p(4,1),p(4,2),p(4,3),p(4,4));MapSnapshot open=map(6,5,List.of());
+        Curve corner=BezierSmoother.certify(List.of(horizontal,vertical),open,.1,POLL);
+        require(corner!=null&&corner.knots().stream().filter(Knot::stop).count()==1,"supplied true tangent discontinuity marked as an internal stop");
+        require(BezierSmoother.certify(List.of(horizontal,new Bezier(p(4.01,1),p(4,2),p(4,3),p(4,4))),open,.1,POLL)==null,"disconnected supplied cubics rejected without implicit bridging");
+        require(BezierSmoother.certify(List.of(new Bezier(p(1,1),p(Double.NaN,2),p(3,1),p(4,1))),open,.1,POLL)==null,"nonfinite supplied control rejected");
+        require(BezierSmoother.certify(List.of(new Bezier(p(1,1),p(1,1),p(3,1),p(4,1))),open,.1,POLL)==null,"zero endpoint derivative rejected as nonregular");
+        require(BezierSmoother.certify(List.of(new Bezier(p(2,2),p(3,2),p(1,2),p(2,2))),open,.1,POLL)==null,"interior cusp cannot receive a regular interval certificate");
+        RuntimeException marker=new RuntimeException("certification-cancel");boolean propagated=false;
+        try{BezierSmoother.certify(controls,map,.3,()->{throw marker;});}catch(RuntimeException cancelled){propagated=cancelled==marker;}
+        require(propagated,"exact-control certification propagates cancellation unchanged");
+        boolean immutable=false;try{certified.segments().clear();}catch(UnsupportedOperationException expected){immutable=true;}
+        require(immutable,"exact-control output immutable");
+    }
     private static void verify(Curve c,MapSnapshot map,double radius,Pose start,Pose end) {
         require(c.segments().size()<=128&&c.knots().size()<=1024,"certificate resources bounded");
         require(distance(c.segments().get(0).p0(),start)==0&&distance(c.segments().get(c.segments().size()-1).p3(),end)==0,"exact positions retained");

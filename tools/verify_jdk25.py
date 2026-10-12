@@ -105,6 +105,7 @@ def main():
         raise ValueError("Acceptance-suite summary changed")
     curves = run([home / "bin" / "java", "-Xmx128m", "-cp", classpath, "pathplanning.motion.BezierSuite"])
     timing = run([home / "bin" / "java", "-Xmx128m", "-cp", classpath, "pathplanning.motion.TimingSuite"])
+    splines = run([home / "bin" / "java", "-Xmx128m", "-cp", classpath, "pathplanning.motion.SplineSuite"])
     motion = run([home / "bin" / "java", "-Xmx128m", "-cp", classpath, "pathplanning.backend.CurvedMotionIntegrationSuite"])
     integration = run([home / "bin" / "java", "-Xmx128m", "-cp", classpath,
                        "pathplanning.backend.WorldStateEnvelopeIntegrationSuite"])
@@ -125,6 +126,7 @@ def main():
         "owner_public_source": {'repository': 'https://github.com/Antigro09/FRC-World-State', 'revision': '0e5b6c3f85d47205cde8b0c80e13fa79d35e95ab', 'exact_source_matches': ['PlannerBackend.java', 'ObstacleEnvelopeBuilder.java', 'PlannerValidation.java'], 'earlier_support_copies': ['Geometry.java', 'World.java'], 'note': 'See vendor/world-state-api-src/PROVENANCE.md for the two documented validation differences.'},
         "wpilib_runtime_classpath": [], "suite_output": suite, "smoke_output": smoke,
         "curve_suite_output": curves, "timing_suite_output": timing, "motion_integration_output": motion,
+        "spline_suite_output": splines,
         "compiled_source_sha256": {str(path.relative_to(ROOT)): hashlib.sha256(path.read_bytes()).hexdigest()
                                    for path in sorted({path for _, source_files, _ in groups for path in source_files})},
         "owner_integration_output": integration, "owner_fixture_sha256": FIXTURE_PINS,

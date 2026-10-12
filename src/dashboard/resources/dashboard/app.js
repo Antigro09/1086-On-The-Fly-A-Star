@@ -160,6 +160,9 @@
     $("replay-controls").hidden = mode !== "replay"; $("replay-inspector").hidden = mode !== "replay";
     $("live-controls").hidden = mode !== "live";
     $("field-import-panel").hidden = !sandbox;
+    $("curve-controls-toggle").hidden = !sandbox;
+    $("show-curve-controls").disabled = !motionModel?.curves.length;
+    $("curve-controls-legend").hidden = !sandbox || !motionModel?.curves.length || !$("show-curve-controls").checked;
     document.querySelectorAll(".mode-tab").forEach(button => { const active = button.dataset.mode === mode; button.classList.toggle("active", active); button.setAttribute("aria-selected", String(active)); });
     document.querySelectorAll("[data-tool]").forEach(button => { button.disabled = !sandbox || (!!scenario.field_map && button.dataset.tool === "obstacle"); button.classList.toggle("active", button.dataset.tool === tool); });
     $("add-obstacle").disabled = !!scenario.field_map;
@@ -172,7 +175,7 @@
     setText("solver-time", plan?.solver_duration_ns != null ? `${fmt(Number(plan.solver_duration_ns) / 1e6, 2)} ms` : "—");
     const path = points(); setText("path-length", motionModel ? `${fmt(motionModel.length)} m` : path.length ? `${fmt(pathLength(path))} m` : "—");
     setText("motion-duration", motionModel ? `${fmt(motionModel.duration, 2)} s` : "—");
-    setText("motion-detail", motionError || (motionModel ? `${plan.motion.candidate_count} evaluated candidate profiles · ${plan.motion.detail || "Constrained motion profile"}` : plan?.motion?.detail || plan?.detail || "Waiting for a validated Bézier motion profile. No motion is inferred from a geometric path."));
+    setText("motion-detail", motionError || (motionModel ? `${motionModel.curves.length} returned cubics · ${plan.motion.candidate_count} evaluated candidate profiles · ${plan.motion.detail || "Constrained motion profile"}` : plan?.motion?.detail || plan?.detail || "Waiting for a validated Bézier motion profile. No motion is inferred from a geometric path."));
     updateMotionReadout(preview?.playback?.sample || (motionModel ? window.MotionPreview.sampleAt(motionModel, 0) : null));
     const remaining = plan ? big(plan.valid_until_us) - robotNowUs() : 0n;
     setText("validity", plan ? remaining > 0 ? `${fmt(Number(remaining) / 1e6, 1)} s` : "EXPIRED" : "—");
@@ -290,6 +293,22 @@
     ctx.beginPath(); ctx.moveTo(f.length_m * view.scale / 2 + 10, 0); ctx.lineTo(f.length_m * view.scale / 2 + 4, -4); ctx.lineTo(f.length_m * view.scale / 2 + 4, 4); ctx.closePath(); ctx.fillStyle = "#173b39"; ctx.fill(); ctx.restore();
   }
 
+  function drawCurveControls(curves, stale) {
+    ctx.save(); ctx.lineWidth = 1; ctx.strokeStyle = stale ? "#8b9691" : "#426a9a";
+    for (const curve of curves) {
+      const controls = [curve.p0, curve.p1, curve.p2, curve.p3].map(screen);
+      ctx.beginPath(); ctx.moveTo(controls[0].x, controls[0].y);
+      controls.slice(1).forEach(p => ctx.lineTo(p.x, p.y));
+      ctx.setLineDash([3, 4]); ctx.stroke(); ctx.setLineDash([]);
+      controls.forEach((p, index) => {
+        ctx.fillStyle = index === 0 || index === 3 ? (stale ? "#8b9691" : "#426a9a") : "#fffef8";
+        if (index === 0 || index === 3) { ctx.fillRect(p.x - 3, p.y - 3, 6, 6); ctx.strokeRect(p.x - 3, p.y - 3, 6, 6); }
+        else { ctx.beginPath(); ctx.arc(p.x, p.y, 3.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
+      });
+    }
+    ctx.restore();
+  }
+
   function draw() {
     const bounds = scenario.bounds;
     if (!bounds || ![bounds.min_x_m, bounds.min_y_m, bounds.max_x_m, bounds.max_y_m].every(finite) || bounds.max_x_m <= bounds.min_x_m || bounds.max_y_m <= bounds.min_y_m || bounds.max_x_m - bounds.min_x_m > 100 || bounds.max_y_m - bounds.min_y_m > 100) return;
@@ -303,10 +322,10 @@
     ctx.lineWidth = 1; ctx.font = "9px Menlo, monospace"; ctx.textAlign = "center";
     const spacing = Math.max(.5, Math.ceil((b.max_x_m - b.min_x_m) / 20 * 2) / 2);
     for (let x = Math.ceil(b.min_x_m / spacing) * spacing; x <= b.max_x_m + .001; x += spacing) {
-      line({x_m: x, y_m: b.min_y_m}, {x_m: x, y_m: b.max_y_m}, "#dce6d9"); const s = screen({x_m: x, y_m: b.min_y_m}); ctx.fillStyle = "#738979"; ctx.fillText(fmt(x, 1), s.x, s.y + 17);
+      line({x_m: x, y_m: b.min_y_m}, {x_m: x, y_m: b.max_y_m}, "#e8eee3"); const s = screen({x_m: x, y_m: b.min_y_m}); ctx.fillStyle = "#738979"; ctx.fillText(fmt(x, 1), s.x, s.y + 17);
     }
     for (let y = Math.ceil(b.min_y_m / spacing) * spacing; y <= b.max_y_m + .001; y += spacing) {
-      line({x_m: b.min_x_m, y_m: y}, {x_m: b.max_x_m, y_m: y}, "#dce6d9"); const s = screen({x_m: b.min_x_m, y_m: y}); ctx.fillStyle = "#738979"; ctx.fillText(fmt(y, 1), s.x - 22, s.y + 3);
+      line({x_m: b.min_x_m, y_m: y}, {x_m: b.max_x_m, y_m: y}, "#e8eee3"); const s = screen({x_m: b.min_x_m, y_m: y}); ctx.fillStyle = "#738979"; ctx.fillText(fmt(y, 1), s.x - 22, s.y + 3);
     }
     ctx.strokeStyle = "#8da891"; ctx.lineWidth = 1.5; ctx.strokeRect(left.x, left.y, right.x - left.x, right.y - left.y);
     ctx.fillStyle = "#607f6a"; ctx.fillText("x / meters →", (left.x + right.x) / 2, right.y + 34);
@@ -322,8 +341,9 @@
       label(o, o.id, "#657164", 4);
     });
     const path = points(), stale = !geometryCurrent();
-    if (path.length) { ctx.setLineDash(stale || motionModel ? [5, 6] : []); for (let i = 1; i < path.length; i++) line(path[i - 1], path[i], stale || motionModel ? "#8b9691" : "#dd592d", motionModel ? 1 : 3); ctx.setLineDash([]); if (!motionModel) path.forEach(p => circle(p, .025, stale ? "#8b9691" : "#dd592d", "#fffef8")); }
+    if (path.length && !motionModel) { ctx.setLineDash(stale ? [5, 6] : []); for (let i = 1; i < path.length; i++) line(path[i - 1], path[i], stale ? "#8b9691" : "#dd592d", 3); ctx.setLineDash([]); path.forEach(p => circle(p, .025, stale ? "#8b9691" : "#dd592d", "#fffef8")); }
     if (motionModel && mode === "sandbox") {
+      if ($("show-curve-controls").checked) drawCurveControls(motionModel.curves, stale);
       ctx.beginPath();
       for (const curve of motionModel.curves) { const p0 = screen(curve.p0), p1 = screen(curve.p1), p2 = screen(curve.p2), p3 = screen(curve.p3); ctx.moveTo(p0.x, p0.y); ctx.bezierCurveTo(p1.x, p1.y, p2.x, p2.y, p3.x, p3.y); }
       ctx.strokeStyle = stale ? "#8b9691" : "#dd592d"; ctx.lineWidth = 3; ctx.setLineDash(stale ? [5, 6] : []); ctx.stroke(); ctx.setLineDash([]);
@@ -403,6 +423,7 @@
   canvas.addEventListener("wheel", event => { event.preventDefault(); zoom = Math.max(.65, Math.min(3, zoom * (event.deltaY > 0 ? .92 : 1.08))); draw(); }, {passive: false});
   $("fit-view").onclick = () => { zoom = 1; draw(); };
   $("show-envelopes").onchange = draw;
+  $("show-curve-controls").onchange = () => { renderUI(); draw(); };
   document.querySelectorAll("[data-tool]").forEach(button => button.onclick = () => { tool = button.dataset.tool; renderUI(); });
   document.querySelectorAll("[data-edit]").forEach(input => input.onchange = () => {
     const value = Number(input.value); if (!input.value.trim() || !finite(value)) { localError = "All scenario coordinates and limits must be finite."; renderUI(); return; }

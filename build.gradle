@@ -176,6 +176,15 @@ tasks.register('timingCheck', JavaExec) {
     maxHeapSize = '128m'
 }
 
+tasks.register('splineCheck', JavaExec) {
+    group = 'verification'
+    description = 'Bounded whole-route cubic continuity, shape, collision and cancellation acceptance.'
+    dependsOn tasks.named('contractTestClasses')
+    classpath = sourceSets.contractTest.runtimeClasspath
+    mainClass = 'pathplanning.motion.SplineSuite'
+    maxHeapSize = '128m'
+}
+
 tasks.register('motionIntegrationCheck', JavaExec) {
     group = 'verification'
     description = 'Bounded common motion proposal integration; no robot following.'
@@ -249,6 +258,7 @@ tasks.named('check') {
     dependsOn tasks.named('worldStateIntegrationCheck')
     dependsOn tasks.named('curveCheck')
     dependsOn tasks.named('timingCheck')
+    dependsOn tasks.named('splineCheck')
     dependsOn tasks.named('motionIntegrationCheck')
 }
 

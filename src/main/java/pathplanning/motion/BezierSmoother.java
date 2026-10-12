@@ -70,6 +70,36 @@ public final class BezierSmoother {
                     "Validated piecewise straight fallback; internal tangent discontinuities require stops");
         }
     }
+    /** Certifies exact caller-supplied cubic control polygons, without seed-corner trimming.
+     * Returns null for invalid, disconnected, nonregular, unsafe or over-capacity candidate geometry.
+     * Invalid map/radius arguments and poll exceptions retain the existing explicit exception contract.
+     * True directional join discontinuities require stops; this entry point does not promise C1 joins
+     * unless the caller supplied equal incoming/outgoing derivative vectors. */
+    public static Curve certify(List<Bezier> segments, MapSnapshot map, double radius, Runnable poll) {
+        validate(List.of(new Pose(0,0,0)),map,radius,null,poll);
+        if(segments==null || segments.isEmpty() || segments.size()>MAX_SEGMENTS)return null;
+        List<Bezier> controls=new ArrayList<>(segments.size());Set<Integer> stops=new HashSet<>();Bezier previous=null;
+        for(Bezier b:segments) {
+            poll.run();
+            if(b==null)return null;
+            for(Pose p:new Pose[]{b.p0(),b.p1(),b.p2(),b.p3()})
+                if(p==null || !finite(p.x(),p.y(),p.headingRadians()) || Math.abs(p.x())>10000 || Math.abs(p.y())>10000)return null;
+            Pose began=b.derivative(0),ended=b.derivative(1);
+            if(!finite(norm(began),norm(ended)) || norm(began)==0 || norm(ended)==0)return null;
+            if(previous!=null) {
+                if(!samePosition(previous.p3(),b.p0()))return null;
+                double incoming=directionVector(previous.derivative(1)),outgoing=directionVector(began);
+                double roundoff=64*Math.max(Math.ulp(1.0),Math.max(Math.ulp(incoming),Math.ulp(outgoing)));
+                if(Math.abs(wrap(outgoing-incoming))>roundoff)stops.add(controls.size()-1);
+            }
+            if(!SweptCollision.safe(map,b.p0(),b.p0(),radius,poll) || !SweptCollision.safe(map,b.p3(),b.p3(),radius,poll))return null;
+            controls.add(b);previous=b;
+        }
+        Curve[] certified=new Curve[1];
+        addCertified(value->certified[0]=value,new HashSet<>(),new Built(List.copyOf(controls),Set.copyOf(stops)),
+                map,radius,poll,"Exact supplied cubic controls; directional join stops detected with an ulp roundoff guard");
+        return certified[0];
+    }
     /** Rechecks the supplied controls, not earlier seed geometry or a cached certificate.
      * Useful after coordinate conversion. Caller may add a numerical conversion guard to radius;
      * this method adds no second robot footprint inflation and never changes the supplied profile. */

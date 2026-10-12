@@ -12,6 +12,7 @@ import pathplanning.geometric.Geometry;
 import pathplanning.motion.BezierSmoother;
 import pathplanning.motion.MotionPath;
 import pathplanning.motion.TimeParameterizer;
+import pathplanning.motion.SplineOptimizer;
 
 /** Bounded route/curve/time optimization. The owner SPI remains geometry-only; timed motion is a separate proposal.
  * No drivetrain follower, motor model, transport or physical objective authority lives here. */
@@ -100,7 +101,7 @@ public final class CurvedMotionPlanner {
                 List<Geometry.Pose> local=new ArrayList<>();
                 for (Pose2 p:seed.path().points()) local.add(new Geometry.Pose(p.position().x()-request.bounds().minXM(),
                         p.position().y()-request.bounds().minYM(),p.headingRad()));
-                BezierSmoother.visitCandidates(local,map,request.footprint().boundingRadiusM()+BASE_CLEARANCE,tangent,poll,curve -> {
+                java.util.function.Consumer<MotionPath.Curve> evaluate=curve -> {
                     poll.run();
                     if (!best.seen.add(curve.segments())) return;
                     try {
@@ -115,7 +116,10 @@ public final class CurvedMotionPlanner {
                             best.profile=profile; best.curve=canonical; best.seed=seed;
                         }
                     } catch (IllegalArgumentException infeasible) { best.rejection=infeasible.getMessage(); }
-                });
+                };
+                // Keep a certified incumbent, then refine continuous-space controls across whole legs.
+                BezierSmoother.visitCandidates(local,map,request.footprint().boundingRadiusM()+BASE_CLEARANCE,tangent,poll,evaluate);
+                SplineOptimizer.visitCandidates(local,map,request.footprint().boundingRadiusM()+BASE_CLEARANCE,tangent,limits,poll,evaluate);
             }
         } catch (RefineDone complete) {
             // Retain an already validated incumbent; never retain work after cancellation or actual expiry.
