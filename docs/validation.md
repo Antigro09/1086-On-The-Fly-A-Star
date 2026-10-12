@@ -1,5 +1,13 @@
 # Executed validation and remaining checks
 
+The later [curved-motion validation](curved-motion.md) supersedes this historical
+implementation's time-parameterization-unrun status. The owner geometric SPI
+remains unchanged; optional Bézier geometry and point-mass timing now pass
+32,331 curve assertions, 16 timing groups and 263 integration checks on JDK17
+and JDK25 with release-17 bytecode. Current desktop checks pass 35 model and
+12 HTTP cases, plus 13 JavaScript motion-preview checks. Following, physical
+drivetrain qualification and controller timing remain unrun.
+
 Implementation date: 2026-10-08. Baseline `e6e8c73821330a5edb5da02658da2fe32ec8da45`; initial `main` checkout clean; branch `codex/geometric-backend-2026`. Existing default-branch work is preserved.
 
 ## Host and tools

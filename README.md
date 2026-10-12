@@ -2,6 +2,8 @@
 
 This library proposes collision-validated **geometric paths** for an immutable World-State request. World-State and robot code choose tasks, maintain targets and match state, guard execution, and verify physical success. A successful search completes no physical objective. Robot-code integration is on hold.
 
+The optional `CurvedMotionPlanner` now evaluates **cubic Bézier paths with variable speed and acceleration**, choosing the fastest feasible candidate within a shared bounded budget. The local Sandbox displays these actual curves and their separate motion profile. [Curved motion](docs/curved-motion.md) explains collision certification, timing, moving-goal replacement, the retained A* search and limits of the point-mass model.
+
 The production core is Java 17 with no WPILib, NetworkTables, PathPlanner or native dependency. Its adapter implements World-State `frc-planner/1`; its `PlannerBackend` source matches [public World-State revision `0e5b6c3`](https://github.com/Antigro09/FRC-World-State/tree/0e5b6c3f85d47205cde8b0c80e13fa79d35e95ab). The standalone build retains earlier support copies with exact hashes and differences documented in [API provenance](vendor/world-state-api-src/PROVENANCE.md). The season-specific algae/barge demonstration is preserved in a separate historical source set and excluded from production jars.
 
 ## Build and run
@@ -46,9 +48,9 @@ The local 2D GUI is a separate desktop application. HTTP/Jackson/browser resourc
 ./gradlew --no-daemon --max-workers=1 runDashboard -PdashboardPort=8086
 ```
 
-Open `http://127.0.0.1:8086` on the laptop and stop the foreground process with Ctrl-C. Sandbox edits/replans use the actual Java `PlannerBackend`; Replay is deterministic recorded playback; Live displays separately supplied synthetic/local bridge telemetry read-only. No robot NT publication, actuator command or hardware execution is implemented. The animated follower is expressly kinematic, with speed/acceleration limits, rather than a qualified drivetrain simulator.
+Open `http://127.0.0.1:8086` on the laptop and stop the foreground process with Ctrl-C. Sandbox edits/replans use the actual Java curve/timing planner through the request gate; Replay is deterministic recorded playback; Live displays separately supplied synthetic/local bridge telemetry read-only. Refresh a previously open page and select Plan to load the new preview. It follows exported Bézier controls and backend timing, including braking before bends and separate holonomic rotation. No robot NT publication, actuator command or hardware execution is implemented. The animated follower is kinematic and does not qualify a drivetrain model.
 
-Run the bounded desktop checks with `dashboardContractCheck dashboardHttpCheck`; run the independent field-map checks with `node fixtures/field-map/test-field-map.mjs` and async import regressions with `node fixtures/dashboard/test-scenario-import.mjs`. A separate `dashboardMockProducer -PmockFrames=30 -PmockIntervalMs=1000 -PdashboardPort=8086` invocation demonstrates Live input and freshness expiry. [Browser validation](docs/dashboard-validation.md) records actual local interactions and screenshot files. [Desktop telemetry](docs/dashboard-telemetry.md) gives the exact implemented routes and limits.
+Run the bounded desktop checks with `dashboardContractCheck dashboardHttpCheck`; `build` also runs `curveCheck`, `timingCheck` and `motionIntegrationCheck`. Run the independent preview checks with `node fixtures/dashboard/test-motion-preview.mjs`, field-map checks with `node fixtures/field-map/test-field-map.mjs` and async import regressions with `node fixtures/dashboard/test-scenario-import.mjs`. A separate `dashboardMockProducer -PmockFrames=30 -PmockIntervalMs=1000 -PdashboardPort=8086` invocation demonstrates Live input and freshness expiry. [Browser validation](docs/dashboard-validation.md) records earlier actual local interactions; [curved-motion validation](docs/curved-motion.md) distinguishes current CPU/model/HTTP/JavaScript evidence. [Desktop telemetry](docs/dashboard-telemetry.md) gives the exact implemented routes and limits.
 
 Field images remain browser-local. PNG/JPEG/WebP imports require explicit metric calibration, independent checks, polygon review and revision-bound approval. Dark-region suggestions are unreviewed outlines, not physical-object recognition. [Field map format](docs/field-map-format.md) defines `frc-field-map/1`, golden fixtures, unknown heights and raw geometry. Arbitrary valid boundaries render, but the current planner accepts a full rectangular boundary without holes and uses conservative obstacle circles. Any image/calibration/geometry edit invalidates approval.
 
@@ -57,6 +59,7 @@ Field images remain browser-local. PNG/JPEG/WebP imports require explicit metric
 ## Entry points and ownership
 
 - `AStarPlannerBackend(LongSupplier robotTimeUs)` implements `PlannerBackend`. Supply the **robot monotonic microsecond domain** used by the request; never substitute NT server timestamps or `System.nanoTime()` values. Its synchronous `plan` must run off the robot periodic thread.
+- `CurvedMotionPlanner(nanoTime, robotTimeUs)` adds separate curve/time proposals; `plan` requires full remaining forecast coverage, while `planRecedingHorizon` qualifies only the prefix before expiry. Supply verified extra motion limits. Its geometric SPI result retains null `trajectory`; use the explicit optional proposal instead of changing the owner contract.
 - `LatestRequestPlanner` supplies a single daemon worker and one replaceable pending request. It starts disabled. Call `setEnabled(true)`, `invalidate(authoritativeSnapshot)` and `submit(request)` at the appropriate external boundaries. Read geometry through `currentProposal(robotNowUs)`. Futures are diagnostic; callbacks must use async continuations.
 - Disable, cancel, task replacement, pose reset, source restart and snapshot/map/field changes must call the gate's disable/cancel/invalidate methods immediately. This removes proposals and cancels active work. World-State's robot execution guard remains required on every cycle.
 
@@ -66,7 +69,7 @@ Use one planning-worker owner: World-State's worker can call the synchronous bac
 
 ## Geometry and collision contract
 
-The solver uses eight-connected holonomic A* with bounded cells, queue entries, expansions and elapsed monotonic time. It connects exact start/goal poses and applies validated line-of-sight simplification. Translation preserves holonomic heading; a separate final stationary rotation reaches the requested heading. It provides no drivetrain feasibility, feedforward, velocity profile or curved trajectory claim.
+The geometric solver uses eight-connected holonomic A* with bounded cells, queue entries, expansions and elapsed monotonic time. It connects exact start/goal poses and applies validated line-of-sight simplification. Its geometric-only mode preserves holonomic heading during translation and appends a final stationary rotation. The optional curve/timing stage replaces corners with collision-certified cubic candidates and profiles translation and rotation under explicit kinematic limits. It supplies no drivetrain feasibility or feedforward qualification.
 
 The robot's raw length and width become a circumscribed disk plus configured clearance. **This backend alone adds robot footprint inflation.** Static grid cells and World-State obstacle envelopes are raw occupancy and must not already include robot radius. Capsule-versus-rectangle checks cover every point along segments, diagonal corners, all footprint rotations, field edges, and the entire position-tolerance region. Reconstruction, simplification and API conversion each receive another collision check. Touching occupancy is collision. The disk and circle-to-box conversion deliberately reject some physically possible narrow passages; grid discretization also limits completeness.
 
@@ -84,7 +87,7 @@ These envelopes are conservative swept occupancy, **not space-time planning**. T
 
 See [official-source verification](docs/target-verification.md) and `targets/`. Offseason game year does not choose the controller toolchain. Java 21/WPILib 2024 binaries from the audited baseline are removed. Alpha-7 moves to `org.wpilib.*`; its NT metadata is nanoseconds, while 2026 metadata and JSON `_us` remain microseconds. This component uses neither NT API; any external transport boundary must normalize units separately. The production core and World-State SPI adapter need no native WPILib/NT profile or distinct 2027 adapter. Their packaged dependencies are only `java.base`, the core, and World-State's owner API. The historical WPILib 2026 demo remains isolated. Gradle 8.5 serves the Java 17 build; a future native alpha-7 controller project must use its separately pinned Gradle 9.4.1/JDK 25 profile.
 
-PathPlanner is not selected. A future integration must pin its exact conversion/custom-Pathfinder API, assign one owner for time parameterization/following, supply current velocity/rotation and verified drivetrain constraints, and collision-check the timed result. Its endpoint replanning limitation cannot supply a stop mechanism. Robot integration owns feedforward units and module order.
+PathPlanner is not a runtime dependency. Its pathfinding separation and Choreo's motion-duration objective informed the optional pure-Java curve/timing implementation. A future vendor integration must pin the exact conversion/custom-Pathfinder API, assign one owner for time parameterization/following, supply current velocity/rotation and verified drivetrain constraints, and collision-check the timed result. Endpoint replanning cannot supply a stop mechanism. Robot integration owns feedforward units and module order.
 
 ## Capability evidence
 
@@ -93,9 +96,11 @@ PathPlanner is not selected. A future integration must pin its exact conversion/
 | Geometric holonomic search, static/dynamic envelopes, swept footprint, simplification | Yes | Yes | CPU synthetic suite/example | No |
 | Immutable snapshot, invalid-input checks, timeout/resource/cancellation bounds | Yes | Yes | CPU synthetic suite | No |
 | Latest-request publication, disable/cancel/reset/map/source invalidation | Yes | Yes, including uncooperative old solver | Threaded synthetic suite | No |
-| Motion timing, drivetrain following, physical task completion, controller integration | No | No | No | No |
+| Collision-certified Bézier candidates and constrained point-mass motion timing | Yes | 32,331 curve assertions, 16 timing groups, 263 integration checks | CPU synthetic profiles and local preview | No |
+| Moving goal replacement and short-horizon prefix qualification | Yes; target selection/interception belongs to World-State | Yes, including blocked older request | Threaded synthetic suite | No |
+| Drivetrain following, game-piece pursuit policy, physical task completion, controller integration | No | No | No | No |
 | Pure Java core/World-State SPI adapter on Mac Java 25 | Yes; common release-17 artifact | Current 18 acceptance groups + 20 owner-integration checks passed | CPU synthetic suite/example | No |
-| Separate 2D Sandbox, Replay and read-only synthetic Live dashboard | Yes | 30 model + 12 HTTP checks; actual browser interactions | Kinematic preview, not drivetrain physics | No |
+| Separate 2D Sandbox, Replay and read-only synthetic Live dashboard | Yes | 35 model + 12 HTTP checks, 13 motion-preview checks; earlier browser interactions | Curved kinematic preview, not drivetrain physics | No |
 | Affine image import, polygon/holes review, exact approval and shared field map | Yes | 58 independent JS checks + Java/cross-consumer checks; actual review/edit workflow | Synthetic raster/metric fixture | No |
 | Systemcore controller/native qualification and WPILib 2026 + Systemcore | Alpha-7 target pinned; 2026 combination unsupported | Controller checks unrun | Unrun | No |
 

@@ -12,8 +12,9 @@ import java.util.Set;
 import java.util.function.LongSupplier;
 import org.frcworldstate.core.Geometry.*;
 import org.frcworldstate.core.PlannerBackend.*;
-import pathplanning.backend.AStarPlannerBackend;
+import pathplanning.backend.CurvedMotionPlanner;
 import pathplanning.backend.LatestRequestPlanner;
+import pathplanning.motion.MotionPath;
 import static pathplanning.dashboard.JsonSupport.*;
 
 /** Independent sandbox, replay and read-only synthetic telemetry stores; no robot transport. */
@@ -23,11 +24,12 @@ final class DashboardModel implements AutoCloseable {
     private final LongSupplier nanoTime;
     private final long clockOriginNs;
     private final LatestRequestPlanner planner;
+    private final CurvedMotionPlanner curvedPlanner;
     private ObjectNode scenario = defaultScenario();
     private long generation;
     private long snapshotId = 1;
     private long mapVersion = 1;
-    private PlanRecord sandboxPlan;
+    private volatile PlanRecord sandboxPlan;
     private List<ObjectNode> replay;
     private int replayIndex;
     private ObjectNode live;
@@ -42,8 +44,8 @@ final class DashboardModel implements AutoCloseable {
     DashboardModel(LongSupplier nanoTime) {
         this.nanoTime = nanoTime;
         clockOriginNs = nanoTime.getAsLong();
-        planner = new LatestRequestPlanner(new AStarPlannerBackend(AStarPlannerBackend.Options.conservativeDefault(),
-                nanoTime, this::robotNowUs));
+        curvedPlanner = new CurvedMotionPlanner(nanoTime, this::robotNowUs);
+        planner = new LatestRequestPlanner(this::computeMotion);
         planner.setEnabled(true);
         replay = builtInReplay();
     }
@@ -97,11 +99,24 @@ final class DashboardModel implements AutoCloseable {
                 new Bounds(b.get("min_x_m").doubleValue(), b.get("min_y_m").doubleValue(), b.get("max_x_m").doubleValue(), b.get("max_y_m").doubleValue()),
                 obstacles, issuedUs, expiryUs, new SearchBudget(nanoTime.getAsLong(), budgetMs * 1_000_000), () -> false);
         planner.invalidate(LatestRequestPlanner.Context.from(request));
-        PlanRecord record = new PlanRecord(request, generation, budgetMs);
+        JsonNode motion = scenario.get("motion_limits");
+        PlanRecord record = new PlanRecord(request, generation, budgetMs, new CurvedMotionPlanner.MotionLimits(
+                motion.get("max_centripetal_acceleration_mps2").doubleValue(),
+                motion.get("max_angular_acceleration_radps2").doubleValue(),motion.get("goal_end_speed_mps").doubleValue()));
         sandboxPlan = record;
         // Constant-time volatile assignment only: never acquire the model lock in a gate continuation.
         planner.submit(request).thenAccept(result -> record.result = result);
         return sandboxState();
+    }
+
+    private Result computeMotion(Request request) {
+        PlanRecord record = sandboxPlan;
+        if (record == null || !record.request.requestId().equals(request.requestId()))
+            return new Result(request.requestId(),request.taskId(),request.epoch(),request.snapshotId(),request.obstacleMapVersion(),
+                    Status.CANCELLED,null,null,0,request.validUntilUs(),CurvedMotionPlanner.BACKEND_ID,"Replaced before motion planning");
+        CurvedMotionPlanner.Proposal proposal = curvedPlanner.plan(request,record.motionLimits);
+        record.motion = proposal;
+        return proposal.geometry();
     }
 
     synchronized ObjectNode cancel() {
@@ -141,10 +156,45 @@ final class DashboardModel implements AutoCloseable {
                 boolean over = result.path().points().size() > MAX_POINTS;
                 plan.put("display_limit_exceeded", over).put("point_count", result.path().points().size());
                 if (!over) for (Pose2 p : result.path().points()) plan.withArray("positions").add(JsonSupport.pose(p.position().x(), p.position().y(), p.headingRad()));
+                if (!over && record.motion != null && record.motion.profile() != null) plan.set("motion", motionView(record.motion));
             }
         }
         return plan;
     }
+
+    private static ObjectNode motionView(CurvedMotionPlanner.Proposal proposal) {
+        MotionPath.Curve curve=proposal.curve(); MotionPath.Profile profile=proposal.profile();
+        ObjectNode motion=object().put("status","SUCCESS").put("geometry_kind","cubic_bezier").put("executable",false)
+                .put("duration_s",profile.durationSec()).put("length_m",curve.lengthM()).put("peak_speed_mps",profile.peakSpeedMps())
+                .put("planned_start_us",proposal.plannedStartUs())
+                .put("validated_prefix_s",proposal.validatedPrefixSec())
+                .put("candidate_count",proposal.candidateCount()).put("detail",profile.detail()+"; "+curve.detail());
+        ArrayNode segments=array(); double startDistance=0;
+        for (int index=0;index<curve.segments().size();index++) {
+            MotionPath.Bezier b=curve.segments().get(index); double endDistance=startDistance;
+            for (MotionPath.Knot k:curve.knots()) if (k.segment()==index && Math.abs(k.u()-1)<1e-9) endDistance=k.distanceM();
+            ObjectNode entry=object().put("start_distance_m",startDistance).put("length_m",Math.max(0,endDistance-startDistance));
+            entry.set("p0",point(b.p0()));entry.set("p1",point(b.p1()));entry.set("p2",point(b.p2()));entry.set("p3",point(b.p3()));
+            segments.add(entry);startDistance=endDistance;
+        }
+        motion.set("curves",segments); ArrayNode samples=array();
+        for (MotionPath.Sample p:profile.samples()) {
+            double curvature=0;
+            if (!curve.segments().isEmpty()) {
+                MotionPath.Bezier b=curve.segments().get(p.segment());
+                pathplanning.geometric.Geometry.Pose d=b.derivative(p.u()),dd=b.secondDerivative(p.u());
+                double norm=Math.hypot(d.x(),d.y());
+                if (norm>1e-12) curvature=Math.abs(d.x()*dd.y()-d.y()*dd.x())/(norm*norm*norm);
+            }
+            samples.add(object().put("time_s",p.timeSec()).put("distance_m",p.distanceM()).put("segment",p.segment()).put("u",p.u())
+                    .put("x_m",p.x()).put("y_m",p.y()).put("heading_rad",p.headingRadians()).put("tangent_rad",p.tangentRadians())
+                    .put("speed_mps",p.speedMps()).put("acceleration_mps2",p.accelerationMps2())
+                    .put("total_acceleration_mps2",Math.hypot(p.accelerationMps2(),curvature*p.speedMps()*p.speedMps()))
+                    .put("vx_mps",p.vxMps()).put("vy_mps",p.vyMps()).put("omega_radps",p.omegaRadPerSec()));
+        }
+        motion.set("samples",samples);return motion;
+    }
+    private static ObjectNode point(pathplanning.geometric.Geometry.Pose p) { return object().put("x_m",p.x()).put("y_m",p.y()); }
 
     synchronized ObjectNode loadReplay(JsonNode document) {
         object(document, "replay");
@@ -352,6 +402,7 @@ final class DashboardModel implements AutoCloseable {
         scenario.set("goal", JsonSupport.pose(7, 2, 0).put("position_tolerance_m", .05).put("heading_tolerance_rad", .05).put("velocity_tolerance_mps", .05));
         scenario.set("footprint", object().put("length_m", .8).put("width_m", .8));
         scenario.set("constraints", object().put("max_speed_mps", 2).put("max_acceleration_mps2", 2).put("max_angular_speed_radps", 3));
+        scenario.set("motion_limits",object().put("max_centripetal_acceleration_mps2",2).put("max_angular_acceleration_radps2",6).put("goal_end_speed_mps",0));
         ArrayNode obstacles = array();
         obstacles.add(object().put("id", "static-lab").put("x_m", 4).put("y_m", 2).put("radius_m", .55).put("uncertainty_margin_m", .05).put("dynamic", false));
         obstacles.add(object().put("id", "dynamic-lab").put("x_m", 5.5).put("y_m", 3).put("radius_m", .25).put("uncertainty_margin_m", .05).put("dynamic", true));
@@ -371,6 +422,10 @@ final class DashboardModel implements AutoCloseable {
         normalized.set("footprint", object().put("length_m", number(f, "length_m", .01, 5)).put("width_m", number(f, "width_m", .01, 5)));
         normalized.set("constraints", object().put("max_speed_mps", number(c, "max_speed_mps", .01, 20))
                 .put("max_acceleration_mps2", number(c, "max_acceleration_mps2", .01, 30)).put("max_angular_speed_radps", number(c, "max_angular_speed_radps", .01, 30)));
+        JsonNode m=input.hasNonNull("motion_limits") ? object(input.get("motion_limits"),"motion limits") : object();
+        normalized.set("motion_limits",object().put("max_centripetal_acceleration_mps2",optionalNumber(m,"max_centripetal_acceleration_mps2",2,.01,30))
+                .put("max_angular_acceleration_radps2",optionalNumber(m,"max_angular_acceleration_radps2",6,.01,60))
+                .put("goal_end_speed_mps",optionalNumber(m,"goal_end_speed_mps",0,0,20)));
         double minX = number(b, "min_x_m", -100, 100), minY = number(b, "min_y_m", -100, 100),
                 maxX = number(b, "max_x_m", -100, 100), maxY = number(b, "max_y_m", -100, 100);
         if (maxX <= minX || maxY <= minY) throw bad("Invalid rectangular bounds");
@@ -446,7 +501,11 @@ final class DashboardModel implements AutoCloseable {
     static final class UnsupportedGeometry extends IllegalArgumentException { private static final long serialVersionUID = 1L; }
     private static final class PlanRecord {
         final Request request; final long generation; final long budgetMs;
+        final CurvedMotionPlanner.MotionLimits motionLimits;
+        volatile CurvedMotionPlanner.Proposal motion;
         volatile Result result; volatile String overrideStatus;
-        PlanRecord(Request request, long generation, long budgetMs) { this.request = request; this.generation = generation; this.budgetMs = budgetMs; }
+        PlanRecord(Request request, long generation, long budgetMs, CurvedMotionPlanner.MotionLimits motionLimits) {
+            this.request = request; this.generation = generation; this.budgetMs = budgetMs; this.motionLimits=motionLimits;
+        }
     }
 }

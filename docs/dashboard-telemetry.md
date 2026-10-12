@@ -7,8 +7,9 @@ controller-independent core/adapter jars.
 The shipped generic 8×4 m sandbox, replay and CLI producer are conspicuously
 `synthetic_mock`. No real telemetry feed, NetworkTables connection, actuator,
 robot following, physical task completion or hardware qualification is implemented.
-Offline planning calls the exact `AStarPlannerBackend` through `LatestRequestPlanner`
-with one worker and one replaceable pending request. Replay/live ingest never call
+Offline planning calls `CurvedMotionPlanner`, which composes the exact geometric
+`AStarPlannerBackend`, through `LatestRequestPlanner` with one worker and one
+replaceable pending request. Replay/live ingest never call
 the planner and never change sandbox goals or obstacle maps.
 
 HTTP routes are pinned:
@@ -23,7 +24,7 @@ HTTP routes are pinned:
 | `GET /api/replay/sample` | `index=0` | exact recorded frame and replay metadata |
 | `POST /api/live/ingest` | normalized synthetic telemetry frame | read-only live state; CLI producer only |
 
-`/`, `/index.html`, `/app.js`, `/style.css` and `/field-import.js` serve only named
+`/`, `/index.html`, `/app.js`, `/style.css`, `/field-import.js` and `/motion-preview.js` serve only named
 classpath resources under `dashboard/`. No filesystem path, arbitrary URL,
 upload-to-cloud or operating-system endpoint is exposed. All mutations require
 `application/json`. Ordinary bodies are bounded at 64 KiB; replay load at 256 KiB.
@@ -63,7 +64,7 @@ Every state uses `schema_version:"frc-planner-dashboard/1"` and includes:
 
 Identity/timestamp/duration fields are **decimal strings on the wire**:
 `robot_us,captured_us,estimated_robot_us,age_us,epoch,snapshot_id,obstacle_map_version,
-sequence,generation,issued_us,valid_until_us,solver_duration_ns`. Inputs accept exact
+sequence,generation,issued_us,valid_until_us,planned_start_us,solver_duration_ns`. Inputs accept exact
 nonnegative signed-long values as decimal strings or JSON integer tokens. Use
 `BigInt` for exact JavaScript comparisons/differences, converting only bounded
 display durations to Number. Metric values, replay index/count, path count and
@@ -75,6 +76,7 @@ Scenario fields are `field`, `bounds:{min_x_m,min_y_m,max_x_m,max_y_m}`,
 `goal:{x_m,y_m,heading_rad,position_tolerance_m,heading_tolerance_rad,velocity_tolerance_mps}`,
 `footprint:{length_m,width_m}`,
 `constraints:{max_speed_mps,max_acceleration_mps2,max_angular_speed_radps}`,
+`motion_limits:{max_centripetal_acceleration_mps2,max_angular_acceleration_radps2,goal_end_speed_mps}`,
 `obstacles:[{id,x_m,y_m,radius_m,uncertainty_margin_m,dynamic}]`, nullable
 `field_map`, computed `planning_supported` and `warnings`. Headings are CCW SI
 radians, independent of travel direction. Circle dimensions/uncertainty are raw
@@ -88,7 +90,12 @@ solver_duration_ns,backend_id,detail,positions:[{x_m,y_m,heading_rad}],point_cou
 display_limit_exceeded,geometry_kind:"geometric",executable:false`. IDLE has null
 request/task IDs; PENDING has request metadata but no positions. Failures/expired
 results carry no display geometry. Solver nanoseconds are measured computation,
-never motion duration; no timed trajectory is fabricated. Poll at **at most5 Hz**,
+never motion duration. Current Sandbox SUCCESS additionally includes optional
+`motion` with exported Bézier controls, a separately computed kinematic profile,
+motion duration and forecast-covered prefix. Its `executable` remains false;
+the pinned owner SPI `trajectory` remains null. The exact extension and evaluator
+are described in [curved motion](curved-motion.md). Recorded Replay/Live geometry
+does not acquire synthetic timing. Poll at **at most5 Hz**,
 one outstanding request at a time. No search-node stream or continuous replanning
 promise is made.
 
@@ -136,7 +143,7 @@ retained for rendering and return HTTP409 `UNSUPPORTED_FIELD_GEOMETRY` on planni
 Image/calibration approval is local review, not physical authenticity.
 
 Implemented: bounded desktop HTTP model, offline planner gating, synthetic replay
-and CLI telemetry. JDK17 executions passed 30 model checks and 12 loopback HTTP
+and CLI telemetry. Current JDK17 executions passed 35 model checks and 12 loopback HTTP
 checks, including foreign Host/Origin rejection, browser live-ingest rejection,
 duplicate/trailing JSON, body limits and a slow-body connection deadline. Actual
 local Chromium interactions covered edits/replanning, preview/cancel, replay

@@ -79,6 +79,7 @@ public final class DashboardServer implements AutoCloseable {
                 case "/api/live/ingest" -> { requireMethod(method, "POST"); json(exchange, 200, model.ingestLive(body(exchange, SMALL_BODY))); }
                 case "/", "/index.html" -> { requireMethod(method, "GET"); resource(exchange, "index.html", "text/html; charset=utf-8"); }
                 case "/app.js" -> { requireMethod(method, "GET"); resource(exchange, "app.js", "text/javascript; charset=utf-8"); }
+                case "/motion-preview.js" -> { requireMethod(method, "GET"); resource(exchange, "motion-preview.js", "text/javascript; charset=utf-8"); }
                 case "/style.css" -> { requireMethod(method, "GET"); resource(exchange, "style.css", "text/css; charset=utf-8"); }
                 case "/field-import.js" -> { requireMethod(method, "GET"); resource(exchange, "field-import.js", "text/javascript; charset=utf-8"); }
                 default -> json(exchange, 404, error("NOT_FOUND", "Unknown local endpoint"));

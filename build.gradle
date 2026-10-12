@@ -158,6 +158,33 @@ tasks.register('contractCheck', JavaExec) {
     maxHeapSize = '128m'
 }
 
+tasks.register('curveCheck', JavaExec) {
+    group = 'verification'
+    description = 'Bounded whole-curve collision, curvature and cancellation acceptance.'
+    dependsOn tasks.named('contractTestClasses')
+    classpath = sourceSets.contractTest.runtimeClasspath
+    mainClass = 'pathplanning.motion.BezierSuite'
+    maxHeapSize = '128m'
+}
+
+tasks.register('timingCheck', JavaExec) {
+    group = 'verification'
+    description = 'Bounded curve-speed, braking, total acceleration and rotation acceptance.'
+    dependsOn tasks.named('contractTestClasses')
+    classpath = sourceSets.contractTest.runtimeClasspath
+    mainClass = 'pathplanning.motion.TimingSuite'
+    maxHeapSize = '128m'
+}
+
+tasks.register('motionIntegrationCheck', JavaExec) {
+    group = 'verification'
+    description = 'Bounded common motion proposal integration; no robot following.'
+    dependsOn tasks.named('worldStateIntegrationTestClasses')
+    classpath = sourceSets.worldStateIntegrationTest.runtimeClasspath
+    mainClass = 'pathplanning.backend.CurvedMotionIntegrationSuite'
+    maxHeapSize = '128m'
+}
+
 tasks.register('plannerBenchmark', JavaExec) {
     group = 'verification'
     description = 'Opt-in bounded CPU-only development-host benchmark; not a controller qualification.'
@@ -220,6 +247,9 @@ tasks.register('worldStateIntegrationCheck', JavaExec) {
 tasks.named('check') {
     dependsOn tasks.named('contractCheck')
     dependsOn tasks.named('worldStateIntegrationCheck')
+    dependsOn tasks.named('curveCheck')
+    dependsOn tasks.named('timingCheck')
+    dependsOn tasks.named('motionIntegrationCheck')
 }
 
 tasks.register('verifyWorldStateTestFixturePin') {

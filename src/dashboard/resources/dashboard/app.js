@@ -16,6 +16,7 @@
     goal: {x_m: 7, y_m: 2, heading_rad: Math.PI / 2, position_tolerance_m: .05, heading_tolerance_rad: .05, velocity_tolerance_mps: .05},
     footprint: {length_m: .6, width_m: .6},
     constraints: {max_speed_mps: 2, max_acceleration_mps2: 2, max_angular_speed_radps: 3},
+    motion_limits: {max_centripetal_acceleration_mps2: 2, max_angular_acceleration_radps2: 6, goal_end_speed_mps: 0},
     bounds: {min_x_m: 0, min_y_m: 0, max_x_m: 8, max_y_m: 4},
     obstacles: [{id: "static-lab", x_m: 4, y_m: 2, radius_m: .55, uncertainty_margin_m: .05, dynamic: false},
       {id: "dynamic-lab", x_m: 5.5, y_m: 3, radius_m: .25, uncertainty_margin_m: .05, dynamic: true}],
@@ -30,6 +31,11 @@
     const f = value.footprint, c = value.constraints;
     if (!f || ![f.length_m, f.width_m].every(v => finite(v) && v > 0 && v <= 20)) throw new Error("Footprint dimensions must be positive and at most 20 m.");
     if (!c || ![c.max_speed_mps, c.max_acceleration_mps2, c.max_angular_speed_radps].every(v => finite(v) && v > 0 && v <= 30)) throw new Error("Planner limits must be positive finite values no greater than 30.");
+    const m = value.motion_limits;
+    if (!m || ![m.max_centripetal_acceleration_mps2, m.max_angular_acceleration_radps2].every(v => finite(v) && v > 0 && v <= 30) || !finite(m.goal_end_speed_mps) || m.goal_end_speed_mps < 0 || m.goal_end_speed_mps > c.max_speed_mps) throw new Error("Motion acceleration limits must be positive and end speed must be within the speed limit.");
+    if (!finite(value.goal.velocity_tolerance_mps) || value.goal.velocity_tolerance_mps < 0 || value.goal.velocity_tolerance_mps > 30) throw new Error("Goal speed tolerance must be finite and between 0 and 30 m/s.");
+    if (m.goal_end_speed_mps > value.goal.velocity_tolerance_mps) throw new Error("End speed must fit goal speed tolerance. Set the two values explicitly.");
+    if (![value.start.vx_mps ?? 0, value.start.vy_mps ?? 0, value.start.omega_radps ?? 0].every(v => finite(v) && Math.abs(v) <= 30)) throw new Error("Start velocity must be finite and bounded.");
     if (!Array.isArray(value.obstacles) || value.obstacles.length > 4096 || value.obstacles.some(o => !o || typeof o.id !== "string" || !o.id || ![o.x_m, o.y_m, o.radius_m, o.uncertainty_margin_m ?? 0].every(v => finite(v) && Math.abs(v) <= 1000) || o.radius_m <= 0 || (o.uncertainty_margin_m ?? 0) < 0)) throw new Error("Occupancy circles need bounded finite geometry and positive radii (maximum 4096).");
     if (value.field_map) {
       const map = value.field_map;
@@ -59,6 +65,7 @@
   let tool = "inspect", selectedObstacle = null, drag = null, zoom = 1, image = null, imageConfig = null;
   let replayTimer = null, replayCount = 0, replayIndex = 0, replayRevision = 0, replayRequestPending = false;
   let preview = null, previewFrame = null, previewLastTime = 0;
+  let motionModel = null, motionSignature = "", motionError = "";
   const canvas = $("field-canvas"), ctx = canvas.getContext("2d");
   let view = {width: 800, height: 420, scale: 80, left: 50, bottom: 50};
 
@@ -95,6 +102,7 @@
     const nextPlan = draftEditing ? null : data.plan || null;
     if (preview && (nextPlan?.request_id !== preview.requestId || nextPlan?.status !== "SUCCESS")) stopPreview("Stopped: plan changed or expired");
     plan = nextPlan;
+    syncMotion();
     if (data.replay) { replayCount = number(data.replay.frame_count) || 0; replayIndex = number(data.replay.index) || 0; }
     renderUI(); draw();
   }
@@ -116,6 +124,16 @@
     const values = plan.positions || [];
     return values.length <= 10000 ? values.filter(p => finite(p.x_m) && finite(p.y_m) && finite(p.heading_rad)) : [];
   }
+  function syncMotion() {
+    const motion = mode === "sandbox" && plan?.status === "SUCCESS" ? plan.motion : null;
+    const signature = motion ? JSON.stringify(motion) : "";
+    if (signature === motionSignature) return;
+    if (preview) { preview.playback?.cancel(); stopPreview("Stopped: motion profile changed"); preview = null; }
+    motionSignature = signature; motionModel = null; motionError = "";
+    if (!motion) return;
+    try { if (!window.MotionPreview) throw new Error("Motion preview module is unavailable. Geometric inspection remains available."); motionModel = window.MotionPreview.create(motion); }
+    catch (error) { motionError = error.message; }
+  }
   function pathLength(values) { let length = 0; for (let i = 1; i < values.length; i++) length += Math.hypot(values[i].x_m - values[i - 1].x_m, values[i].y_m - values[i - 1].y_m); return length; }
   function setText(id, value) { $(id).textContent = value; }
   function status() { return !freshHttp() ? "DISCONNECTED" : busy ? "PLANNING" : plan?.status || "IDLE"; }
@@ -125,7 +143,16 @@
     if (mode === "sandbox") return !!plan.field && !!state.field && ["season", "map_id", "geometry_revision"].every(key => plan.field[key] === state.field[key]);
     return true;
   }
-  function planCurrent() { return mode === "sandbox" && !draftEditing && freshHttp() && state?.connection?.connected && !state?.connection?.stale && matchingContext() && !busy && !pendingMutations && plan?.status === "SUCCESS" && points().length >= 2 && big(state?.robot_us) < big(plan.valid_until_us); }
+  function robotNowUs() { return big(state?.estimated_robot_us ?? state?.robot_us) + BigInt(Math.round(Math.max(0, performance.now() - arrival) * 1000)); }
+  function geometryCurrent() { return !draftEditing && freshHttp() && state?.connection?.connected && !state?.connection?.stale && matchingContext() && !busy && !pendingMutations && plan?.status === "SUCCESS" && robotNowUs() < big(plan.valid_until_us); }
+  function planCurrent() { return mode === "sandbox" && geometryCurrent() && !!motionModel; }
+  function motionStartUs() { const now = robotNowUs(), planned = big(plan?.motion?.planned_start_us); return now > planned ? now : planned; }
+  function motionFitsWindow() {
+    if (!planCurrent() || typeof plan?.motion?.planned_start_us !== "string" || !/^[0-9]+$/.test(plan.motion.planned_start_us)) return false;
+    const reusable = preview && !preview.finished && !preview.playback.cancelled;
+    const remainingDuration = Math.max(0, motionModel.duration - (reusable ? preview.playback.time : 0));
+    return motionStartUs() + BigInt(Math.ceil(remainingDuration * 1e6)) < big(plan.valid_until_us);
+  }
 
   function renderUI() {
     const sandbox = mode === "sandbox";
@@ -136,15 +163,18 @@
     document.querySelectorAll(".mode-tab").forEach(button => { const active = button.dataset.mode === mode; button.classList.toggle("active", active); button.setAttribute("aria-selected", String(active)); });
     document.querySelectorAll("[data-tool]").forEach(button => { button.disabled = !sandbox || (!!scenario.field_map && button.dataset.tool === "obstacle"); button.classList.toggle("active", button.dataset.tool === tool); });
     $("add-obstacle").disabled = !!scenario.field_map;
-    setText("mode-description", sandbox ? "Edit synthetic geometry. Plan locally. Preview a simple kinematic follower." : mode === "replay" ? "Inspect recorded frames. Timeline playback never invokes the planner." : "Observe local telemetry. Editing, planning and execution controls are unavailable.");
+    setText("mode-description", sandbox ? "Edit synthetic geometry. Plan validated Bézier curves and constrained motion locally." : mode === "replay" ? "Inspect recorded frames. Timeline playback never invokes the planner." : "Observe local telemetry. Editing, planning and execution controls are unavailable.");
     const b = scenario.bounds || DEFAULT.bounds, fieldMap = scenario.field_map;
     setText("field-title", `${fmt(b.max_x_m - b.min_x_m)} × ${fmt(b.max_y_m - b.min_y_m)} m ${fieldMap ? "map view" : "laboratory"}`);
     setText("source-badge", fieldMap ? "REVIEWED MAP INPUT" : "SYNTHETIC");
     setText("field-subtitle", fieldMap?.source?.label || "Generic test space · not official FRC field geometry");
     setText("plan-status", status());
     setText("solver-time", plan?.solver_duration_ns != null ? `${fmt(Number(plan.solver_duration_ns) / 1e6, 2)} ms` : "—");
-    const path = points(); setText("path-length", path.length ? `${fmt(pathLength(path))} m` : "—");
-    const remaining = plan ? big(plan.valid_until_us) - big(state?.estimated_robot_us ?? state?.robot_us) : 0n;
+    const path = points(); setText("path-length", motionModel ? `${fmt(motionModel.length)} m` : path.length ? `${fmt(pathLength(path))} m` : "—");
+    setText("motion-duration", motionModel ? `${fmt(motionModel.duration, 2)} s` : "—");
+    setText("motion-detail", motionError || (motionModel ? `${plan.motion.candidate_count} evaluated candidate profiles · ${plan.motion.detail || "Constrained motion profile"}` : plan?.motion?.detail || plan?.detail || "Waiting for a validated Bézier motion profile. No motion is inferred from a geometric path."));
+    updateMotionReadout(preview?.playback?.sample || (motionModel ? window.MotionPreview.sampleAt(motionModel, 0) : null));
+    const remaining = plan ? big(plan.valid_until_us) - robotNowUs() : 0n;
     setText("validity", plan ? remaining > 0 ? `${fmt(Number(remaining) / 1e6, 1)} s` : "EXPIRED" : "—");
     setText("request-id", plan?.request_id || "—");
     setText("context-identity", `${state?.epoch ?? "—"} / ${state?.snapshot_id ?? "—"}`);
@@ -153,17 +183,18 @@
     const identity = state?.field || {};
     setText("map-identity", `${identity.map_id || identity.mapId || fieldMap?.map?.id || DEFAULT.field.map_id} / ${identity.geometry_revision || identity.geometryRevision || "1"}`);
     const warnings = [...(state?.errors || []), ...(scenario.warnings || [])].map(value => typeof value === "string" ? value : JSON.stringify(value));
-    let message = localError || warnings.join(" · ") || plan?.detail || (sandbox ? "Drag start, goal or occupancy circles to edit. Plan geometry before starting the preview." : "Waiting for a diagnostic frame.");
+    let message = localError || motionError || warnings.join(" · ") || plan?.detail || (sandbox ? "Drag start, goal or occupancy circles to edit. Plan validated motion before starting the preview." : "Waiting for a diagnostic frame.");
     if (sandbox && fieldMap && scenario.planning_supported === false) message = "This map can be inspected, but its geometry is unsupported for planning. " + message;
     if (mode === "live" && state?.connection && !state.connection.connected) message = state.connection.reason || "No live feed connected. Local synthetic mocks only; no robot connection is implemented.";
     if (busy) message = "Planning locally… Cancel revokes the proposal immediately. Solver time is computation, not robot motion time.";
     if (!freshHttp() && state && !localError) message = "HTTP state is older than one second. Retained geometry is historical; preview is stopped. Waiting for a fresh local response.";
     if (draftEditing && !localError) message = "Editing a scenario value. Valid input saves after a short pause, Tab or Enter; the previous proposal has been revoked.";
     const banner = $("status-banner"); banner.textContent = message;
-    banner.className = "status-banner" + (busy ? " busy" : localError || ["INVALID_INPUT", "NO_PATH", "REJECTED"].includes(plan?.status) ? " error" : state?.connection?.stale || !connected || ["STALE_RESULT", "TIMEOUT", "CANCELLED"].includes(plan?.status) ? " warning" : "");
+    banner.className = "status-banner" + (busy ? " busy" : localError || motionError || ["INVALID_INPUT", "NO_PATH", "REJECTED"].includes(plan?.status) ? " error" : state?.connection?.stale || !connected || ["STALE_RESULT", "TIMEOUT", "CANCELLED"].includes(plan?.status) ? " warning" : "");
     $("plan-button").disabled = !connected || busy || draftEditing || scenario.planning_supported === false;
     $("plan-button").textContent = busy ? "Planning…" : "Plan path →";
-    $("preview-play").disabled = !planCurrent();
+    $("preview-play").disabled = !planCurrent() || (!preview?.playing && !motionFitsWindow());
+    if (motionModel && !preview?.playing && !motionFitsWindow()) setText("motion-detail", "The complete remaining motion does not fit the current validity window, or its planned robot start timestamp is missing. Replan before playing.");
     $("preview-play").textContent = preview?.playing ? "Pause preview" : preview?.finished ? "Play again" : preview ? "Resume preview" : "Play preview";
     document.querySelectorAll("[data-edit]").forEach(input => {
       if (document.activeElement === input || draftInput === input || drag) return;
@@ -290,16 +321,22 @@
       if ($("show-envelopes").checked) { const a = screen({x_m: o.x_m - radius, y_m: o.y_m + radius}); ctx.setLineDash([3, 4]); ctx.strokeStyle = "#8a948785"; ctx.strokeRect(a.x, a.y, 2 * radius * view.scale, 2 * radius * view.scale); ctx.setLineDash([]); }
       label(o, o.id, "#657164", 4);
     });
-    const path = points(), stale = draftEditing || pendingMutations > 0 || !freshHttp() || !matchingContext() || plan?.status !== "SUCCESS" || state?.connection?.stale || (mode === "live" && !state?.connection?.connected);
-    if (path.length) { ctx.setLineDash(stale ? [5, 6] : []); for (let i = 1; i < path.length; i++) line(path[i - 1], path[i], stale ? "#8b9691" : "#dd592d", 3); ctx.setLineDash([]); path.forEach(p => circle(p, .025, stale ? "#8b9691" : "#dd592d", "#fffef8")); }
+    const path = points(), stale = !geometryCurrent();
+    if (path.length) { ctx.setLineDash(stale || motionModel ? [5, 6] : []); for (let i = 1; i < path.length; i++) line(path[i - 1], path[i], stale || motionModel ? "#8b9691" : "#dd592d", motionModel ? 1 : 3); ctx.setLineDash([]); if (!motionModel) path.forEach(p => circle(p, .025, stale ? "#8b9691" : "#dd592d", "#fffef8")); }
+    if (motionModel && mode === "sandbox") {
+      ctx.beginPath();
+      for (const curve of motionModel.curves) { const p0 = screen(curve.p0), p1 = screen(curve.p1), p2 = screen(curve.p2), p3 = screen(curve.p3); ctx.moveTo(p0.x, p0.y); ctx.bezierCurveTo(p1.x, p1.y, p2.x, p2.y, p3.x, p3.y); }
+      ctx.strokeStyle = stale ? "#8b9691" : "#dd592d"; ctx.lineWidth = 3; ctx.setLineDash(stale ? [5, 6] : []); ctx.stroke(); ctx.setLineDash([]);
+    }
     const showRobot = mode !== "live" || state?.robot || state?.connection?.connected;
     if (showRobot && scenario.start) { robot(scenario.start); label(scenario.start, mode === "sandbox" ? "START" : "ROBOT", "#247e79", -Math.hypot(scenario.footprint.length_m, scenario.footprint.width_m) / 2 * view.scale - 10); }
     if (showRobot && scenario.goal) { const g = scenario.goal; circle(g, g.position_tolerance_m || .05, "#426a9a10", "#426a9a", [3, 3]); circle(g, .09, "#426a9a", "#fffef8"); line(g, {x_m: g.x_m + .3 * Math.cos(g.heading_rad), y_m: g.y_m + .3 * Math.sin(g.heading_rad)}, "#426a9a", 2); label(g, "GOAL", "#426a9a", -17); }
     if (preview?.pose && mode === "sandbox") robot(preview.pose, true);
     ctx.lineWidth = 1;
+    drawProfile();
   }
 
-  function clearProposal() { stopPreview("Ready after a new plan"); preview = null; $("preview-progress").value = 0; plan = null; localError = ""; }
+  function clearProposal() { preview?.playback?.cancel(); stopPreview("Ready after a new motion plan"); preview = null; $("preview-progress").value = 0; plan = null; motionModel = null; motionSignature = ""; motionError = ""; localError = ""; }
   function beginScenarioDraft(event) {
     if (mode !== "sandbox") return;
     draftInput = event.target;
@@ -337,8 +374,9 @@
   async function cancelPlan() {
     if (mode !== "sandbox") return;
     finishScenarioDraft(); editRevision++; clearProposal(); busy = false; plan = {status: "CANCELLED", detail: "Synthetic planning cancelled. No proposal is current."}; renderUI(); draw();
-    try { const data = await api("/api/sandbox/cancel", {method: "POST", body: "{}"}); if (mode === "sandbox") accept(data, "sandbox", true); }
-    catch (error) { localError = error.message; renderUI(); }
+    const revision = editRevision, context = modeRevision;
+    try { const data = await api("/api/sandbox/cancel", {method: "POST", body: "{}"}); if (mode === "sandbox" && context === modeRevision && revision === editRevision) accept(data, "sandbox", true); }
+    catch (error) { if (context === modeRevision && revision === editRevision) { localError = error.message; renderUI(); } }
   }
   function addCircle(position) { if (scenario.field_map) return; scenario.obstacles ||= []; scenario.obstacles.push({id: `circle-${Date.now().toString(36)}`, x_m: position.x_m, y_m: position.y_m, radius_m: .25, uncertainty_margin_m: .05, dynamic: false}); selectedObstacle = scenario.obstacles.length - 1; commitScenario(); }
 
@@ -408,68 +446,71 @@
   $("replay-file").onchange = async event => { const revision = ++replayRevision, context = modeRevision; replayRequestPending = true; try { pauseReplay(); const data = await readJson(event.target.files[0]); if (mode !== "replay" || context !== modeRevision || revision !== replayRevision) return; const result = await api("/api/replay/load", {method: "POST", body: JSON.stringify(data)}); if (mode === "replay" && context === modeRevision && revision === replayRevision) { localError = ""; accept(result, "replay", true); } } catch (error) { if (context === modeRevision && revision === replayRevision) { localError = `Replay rejected: ${error.message}`; renderUI(); } } finally { if (revision === replayRevision) replayRequestPending = false; event.target.value = ""; } };
   $("refresh-live").onclick = () => { localError = ""; poll(); };
 
-  function segmentDistance(a, b, p) { const dx = b.x_m - a.x_m, dy = b.y_m - a.y_m, length = dx * dx + dy * dy; const t = length ? Math.max(0, Math.min(1, ((p.x_m - a.x_m) * dx + (p.y_m - a.y_m) * dy) / length)) : 0; return Math.hypot(p.x_m - a.x_m - t * dx, p.y_m - a.y_m - t * dy); }
-  function intersectsBox(a, b, box) { let lo = 0, hi = 1; const dx = b.x_m - a.x_m, dy = b.y_m - a.y_m; for (const [p, q] of [[-dx, a.x_m - box.minX], [dx, box.maxX - a.x_m], [-dy, a.y_m - box.minY], [dy, box.maxY - a.y_m]]) { if (Math.abs(p) < 1e-12) { if (q < 0) return false; } else { const r = q / p; if (p < 0) lo = Math.max(lo, r); else hi = Math.min(hi, r); if (lo > hi) return false; } } return true; }
-  function safeSweep(a, b) {
-    const f = scenario.footprint, radius = Math.hypot(f.length_m, f.width_m) / 2 + .02, bounds = scenario.bounds;
-    for (const p of [a, b]) if (p.x_m - radius <= bounds.min_x_m || p.x_m + radius >= bounds.max_x_m || p.y_m - radius <= bounds.min_y_m || p.y_m + radius >= bounds.max_y_m) return false;
-    const circles = [...(scenario.obstacles || [])];
-    for (const polygon of scenario.field_map?.obstacles || []) { const outer = polygon.outer || []; if (!outer.length) continue; const xs = outer.map(p => p[0]), ys = outer.map(p => p[1]); const x = (Math.min(...xs) + Math.max(...xs)) / 2, y = (Math.min(...ys) + Math.max(...ys)) / 2; circles.push({x_m: x, y_m: y, radius_m: Math.max(...outer.map(p => Math.hypot(p[0] - x, p[1] - y))), uncertainty_margin_m: 0}); }
-    for (const o of circles) {
-      const r = o.radius_m + (o.uncertainty_margin_m || 0), box = {minX: o.x_m - r, maxX: o.x_m + r, minY: o.y_m - r, maxY: o.y_m + r};
-      if (intersectsBox(a, b, box)) return false;
-      const corners = [{x_m: box.minX, y_m: box.minY}, {x_m: box.maxX, y_m: box.minY}, {x_m: box.maxX, y_m: box.maxY}, {x_m: box.minX, y_m: box.maxY}];
-      const pointBoxDistance = p => Math.hypot(Math.max(box.minX - p.x_m, 0, p.x_m - box.maxX), Math.max(box.minY - p.y_m, 0, p.y_m - box.maxY));
-      if (Math.min(pointBoxDistance(a), pointBoxDistance(b), ...corners.map(p => segmentDistance(a, b, p))) <= radius) return false;
-    }
-    return true;
+  function updateMotionReadout(sample) {
+    setText("motion-speed", sample ? `${fmt(sample.speed_mps, 2)} m/s` : "—");
+    setText("motion-acceleration", sample ? `${fmt(sample.total_acceleration_mps2 ?? Math.abs(sample.acceleration_mps2), 2)} m/s²` : "—");
   }
-  function stopPreview(message) { if (previewFrame) cancelAnimationFrame(previewFrame); previewFrame = null; if (preview) preview.playing = false; previewLastTime = 0; setText("preview-state", message || "Preview paused"); }
-  function preparePreview() {
-    const path = clone(points()), stages = [];
-    const maximumSpeed = Math.min(Number($("preview-speed").value), scenario.constraints.max_speed_mps), acceleration = Math.min(Number($("preview-acceleration").value), scenario.constraints.max_acceleration_mps2);
-    if (!finite(maximumSpeed) || !finite(acceleration) || maximumSpeed <= 0 || acceleration <= 0) { localError = "Set positive finite preview speed and acceleration."; renderUI(); return false; }
-    for (let i = 1; i < path.length; i++) {
-      const a = path[i - 1], b = path[i], distance = Math.hypot(b.x_m - a.x_m, b.y_m - a.y_m);
-      if (distance > 1e-8) {
-        const accelerationTime = Math.min(maximumSpeed / acceleration, Math.sqrt(distance / acceleration));
-        const peakSpeed = acceleration * accelerationTime, cruiseTime = Math.max(0, (distance - peakSpeed * accelerationTime) / peakSpeed);
-        stages.push({kind: "move", a: {...a}, b: {...b, heading_rad: a.heading_rad}, distance,
-          acceleration, accelerationTime, peakSpeed, cruiseTime, duration: 2 * accelerationTime + cruiseTime, elapsed: 0});
-      }
-      const angle = wrap(b.heading_rad - a.heading_rad);
-      if (Math.abs(angle) > 1e-8) stages.push({kind: "rotate", a: {...b, heading_rad: a.heading_rad}, b: {...b}, distance: Math.abs(angle), sign: Math.sign(angle)});
+  function drawProfile() {
+    const plot = $("motion-profile"), rectangle = plot.getBoundingClientRect();
+    if (!rectangle.width || !rectangle.height) return;
+    const ratio = Math.min(window.devicePixelRatio || 1, 2), width = rectangle.width, height = rectangle.height;
+    plot.width = Math.round(width * ratio); plot.height = Math.round(height * ratio);
+    const graph = plot.getContext("2d"); graph.setTransform(ratio, 0, 0, ratio, 0, 0); graph.clearRect(0, 0, width, height);
+    graph.font = "9px Menlo, monospace"; graph.fillStyle = "#687777";
+    if (!motionModel) { graph.fillText("No validated motion profile", 14, height / 2); return; }
+    const left = 35, top = 12, right = width - 14, bottom = height - 24;
+    const duration = Math.max(motionModel.duration, .001), maximum = Math.max(motionModel.motion.peak_speed_mps, .1) * 1.1;
+    const x = time => left + time / duration * (right - left), y = speed => bottom - speed / maximum * (bottom - top);
+    graph.strokeStyle = "#d3dad3"; graph.lineWidth = 1;
+    for (let i = 0; i <= 2; i++) { const speed = maximum * i / 2; graph.beginPath(); graph.moveTo(left, y(speed)); graph.lineTo(right, y(speed)); graph.stroke(); graph.fillText(fmt(speed, 1), 4, y(speed) + 3); }
+    for (let i = 1; i < motionModel.samples.length; i++) {
+      const a = motionModel.samples[i - 1], b = motionModel.samples[i];
+      if (b.speed_mps < a.speed_mps - 1e-8) { graph.fillStyle = "#dd592d18"; graph.fillRect(x(a.time_s), top, x(b.time_s) - x(a.time_s), bottom - top); }
+      graph.beginPath(); graph.moveTo(x(a.time_s), y(a.speed_mps)); graph.lineTo(x(b.time_s), y(b.speed_mps)); graph.strokeStyle = b.speed_mps < a.speed_mps ? "#dd592d" : "#247e79"; graph.lineWidth = 2; graph.stroke();
     }
-    preview = {requestId: plan.request_id, taskId: plan.task_id, generation: String(plan.generation), issuedUs: big(plan.issued_us), expiresUs: big(plan.valid_until_us), stages, index: 0, position: 0, speed: 0, elapsed: 0, pose: {...path[0]}, playing: false, finished: false}; $("preview-progress").value = 0;
-    return true;
+    graph.fillStyle = "#687777"; graph.fillText("0 s", left, height - 7); graph.textAlign = "right"; graph.fillText(`${fmt(motionModel.duration, 2)} s`, right, height - 7);
+    const sample = preview?.playback?.sample;
+    if (sample) { graph.beginPath(); graph.moveTo(x(sample.time_s), top); graph.lineTo(x(sample.time_s), bottom); graph.strokeStyle = "#172f32"; graph.lineWidth = 1; graph.stroke(); graph.beginPath(); graph.arc(x(sample.time_s), y(sample.speed_mps), 3, 0, Math.PI * 2); graph.fillStyle = "#172f32"; graph.fill(); }
+  }
+  function stopPreview(message) {
+    if (previewFrame) cancelAnimationFrame(previewFrame);
+    previewFrame = null;
+    if (preview) { preview.playing = false; preview.playback.pause(); }
+    previewLastTime = 0; setText("preview-state", message || "Preview paused");
+  }
+  function preparePreview() {
+    if (!planCurrent() || !motionFitsWindow()) return false;
+    const identity = {requestId: plan.request_id, taskId: plan.task_id, generation: String(plan.generation), motionSignature};
+    const isCurrent = () => planCurrent() && identity.requestId === plan.request_id && identity.taskId === plan.task_id && identity.generation === String(plan.generation) && identity.motionSignature === motionSignature;
+    const playback = window.MotionPreview.createPlayback(motionModel, isCurrent);
+    preview = {...identity, startUs: motionStartUs(), expiresUs: big(plan.valid_until_us), playback, pose: {...playback.sample}, playing: false, finished: false};
+    $("preview-progress").value = 0; updateMotionReadout(playback.sample); return true;
   }
   function tickPreview(time) {
-    if (!preview?.playing || mode !== "sandbox" || !planCurrent() || preview.requestId !== plan.request_id || preview.taskId !== plan.task_id || preview.generation !== String(plan.generation)) { stopPreview("Stopped: proposal no longer current"); renderUI(); return; }
-    const dt = previewLastTime ? Math.min(.04, (time - previewLastTime) / 1000) : 0; previewLastTime = time; preview.elapsed += dt;
-    if (preview.issuedUs + BigInt(Math.round(preview.elapsed * 1e6)) >= preview.expiresUs) { stopPreview("Stopped: virtual request validity expired"); renderUI(); return; }
-    const stage = preview.stages[preview.index];
-    if (!stage) { preview.finished = true; stopPreview("Preview arrived · simulation only"); $("preview-progress").value = 1; renderUI(); draw(); return; }
-    const previous = {...preview.pose};
-    if (stage.kind === "move") {
-      stage.elapsed = Math.min(stage.duration, stage.elapsed + dt);
-      if (stage.elapsed <= stage.accelerationTime) preview.position = .5 * stage.acceleration * stage.elapsed ** 2;
-      else if (stage.elapsed <= stage.accelerationTime + stage.cruiseTime) preview.position = .5 * stage.acceleration * stage.accelerationTime ** 2 + stage.peakSpeed * (stage.elapsed - stage.accelerationTime);
-      else preview.position = stage.distance - .5 * stage.acceleration * (stage.duration - stage.elapsed) ** 2;
-      if (stage.elapsed === stage.duration) preview.position = stage.distance;
-      const t = preview.position / stage.distance; preview.pose = {x_m: stage.a.x_m + (stage.b.x_m - stage.a.x_m) * t, y_m: stage.a.y_m + (stage.b.y_m - stage.a.y_m) * t, heading_rad: stage.a.heading_rad};
-    } else {
-      const omega = Math.min(1.2, scenario.constraints.max_angular_speed_radps); preview.position = Math.min(stage.distance, preview.position + omega * dt); preview.pose = {...stage.a, heading_rad: wrap(stage.a.heading_rad + stage.sign * preview.position)};
-    }
-    if (!safeSweep(previous, preview.pose)) { preview.pose = previous; stopPreview("Stopped: conservative sweep collision"); renderUI(); draw(); return; }
-    if (preview.position >= stage.distance - 1e-8) { preview.pose = {...stage.b}; preview.index++; preview.position = 0; preview.speed = 0; }
-    $("preview-progress").value = preview.stages.length ? preview.index / preview.stages.length : 1;
-    setText("preview-state", `${stage.kind === "move" ? "Translation" : "Stationary rotation"} · virtual ${fmt(preview.elapsed, 1)} s`); draw(); previewFrame = requestAnimationFrame(tickPreview);
+    if (!preview?.playing || !planCurrent() || preview.requestId !== plan.request_id || preview.taskId !== plan.task_id || preview.generation !== String(plan.generation) || preview.motionSignature !== motionSignature) { preview?.playback?.cancel(); stopPreview("Stopped: motion proposal no longer current"); renderUI(); return; }
+    const dt = previewLastTime ? (time - previewLastTime) / 1000 : 0; previewLastTime = time;
+    if (dt > .25) { stopPreview("Paused: browser display gap · resume explicitly"); renderUI(); return; }
+    const rate = Number($("preview-rate").value);
+    if (!finite(rate) || rate < .25 || rate > 2) { stopPreview("Stopped: invalid playback rate"); return; }
+    const nextTime = Math.min(motionModel.duration, preview.playback.time + dt * rate);
+    if (preview.startUs + BigInt(Math.round(nextTime * 1e6)) >= preview.expiresUs) { preview.playback.cancel(); stopPreview("Stopped: virtual request validity expired"); renderUI(); return; }
+    const sample = preview.playback.advance(dt * rate); preview.pose = {...sample}; preview.finished = preview.playback.finished;
+    $("preview-progress").value = motionModel.duration ? sample.time_s / motionModel.duration : 1;
+    updateMotionReadout(sample); setText("preview-state", `Motion ${fmt(sample.time_s, 2)} / ${fmt(motionModel.duration, 2)} s · tangent a ${fmt(sample.acceleration_mps2, 2)} m/s²`); draw();
+    if (preview.finished) { stopPreview("Preview arrived · simulation only"); renderUI(); return; }
+    previewFrame = requestAnimationFrame(tickPreview);
   }
-  $("preview-play").onclick = () => { if (preview?.playing) { stopPreview("Preview paused · virtual clock paused"); renderUI(); return; } if (!planCurrent()) return; if ((!preview || preview.finished || preview.requestId !== plan.request_id) && !preparePreview()) return; preview.playing = true; previewLastTime = 0; renderUI(); previewFrame = requestAnimationFrame(tickPreview); };
-  $("preview-reset").onclick = () => { stopPreview(); preview = null; $("preview-progress").value = 0; setText("preview-state", "Ready after a successful plan"); renderUI(); draw(); };
-  for (const id of ["preview-speed", "preview-acceleration"]) $(id).onchange = () => { stopPreview("Preview limits changed · restart from the path start"); preview = null; $("preview-progress").value = 0; renderUI(); draw(); };
+  $("preview-play").onclick = () => {
+    if (preview?.playing) { stopPreview("Preview paused · motion clock paused"); renderUI(); return; }
+    if (!planCurrent() || !motionFitsWindow()) return;
+    if ((!preview || preview.finished || preview.requestId !== plan.request_id || preview.motionSignature !== motionSignature || preview.playback.cancelled) && !preparePreview()) return;
+    if (!preview.playback.play()) return;
+    preview.playing = true; previewLastTime = 0; renderUI(); previewFrame = requestAnimationFrame(tickPreview);
+  };
+  $("preview-reset").onclick = () => { preview?.playback?.cancel(); stopPreview(); preview = null; $("preview-progress").value = 0; setText("preview-state", "Ready after a validated motion plan"); renderUI(); draw(); };
+  $("preview-rate").onchange = () => { previewLastTime = 0; setText("preview-state", `Playback ${$("preview-rate").value}× · profile speeds remain physical-time values`); };
 
-  function switchMode(next) { if (next === mode) return; stopPreview(); preview = null; pauseReplay(); finishScenarioDraft(); mode = next; modeRevision++; editRevision++; replayRevision++; replayRequestPending = false; localError = ""; plan = null; state = null; scenario = clone(DEFAULT); zoom = 1; image = null; imageConfig = null; drag = null; renderUI(); draw(); poll(); }
+  function switchMode(next) { if (next === mode) return; preview?.playback?.cancel(); stopPreview(); preview = null; motionModel = null; motionSignature = ""; motionError = ""; pauseReplay(); finishScenarioDraft(); mode = next; modeRevision++; editRevision++; replayRevision++; replayRequestPending = false; localError = ""; plan = null; state = null; scenario = clone(DEFAULT); zoom = 1; image = null; imageConfig = null; drag = null; renderUI(); draw(); poll(); }
   document.querySelectorAll("[data-mode]").forEach(button => button.onclick = () => switchMode(button.dataset.mode));
   window.addEventListener("resize", draw);
   $("host-label").textContent = `LOCAL / ${location.port || "8086"}`;

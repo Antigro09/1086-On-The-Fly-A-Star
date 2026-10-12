@@ -1,5 +1,11 @@
 # Local desktop validation
 
+This document records the earlier polyline browser session. The subsequent
+Bézier/timing implementation has current CPU, model, loopback HTTP and actual
+JavaScript evaluator checks documented in [curved motion](curved-motion.md).
+The earlier screenshots do not establish visual interaction checks for that
+new version. Current desktop checks pass 35 model and 12 HTTP cases.
+
 This evidence covers the separate desktop application on the development Mac,
 not robot execution. The browser/server fixtures are synthetic. No real
 NetworkTables producer, camera calibration qualification, drivetrain physics,
@@ -103,7 +109,8 @@ preview binds127.0.0.1:8086 and is stopped with Ctrl-C; no service/autostart was
 Remaining: genuine owner/NT feed and clock-domain adapter; real field image/metric
 measurement and application accuracy thresholds; external image-file chooser
 round trip; controller/native deployment; combined robot-stack timing; drivetrain
-following/time parameterization and physical verification. WPILib2026+Systemcore
+following/drivetrain qualification and physical verification. Optional point-mass
+time parameterization is now implemented and CPU-tested separately. WPILib2026+Systemcore
 remains unsupported by the recorded official matrix. Robot integration stays on
 hold. Source publication performs no package publication, GPU work, hardware
 action or large training. The tested source files and fixtures remain unchanged

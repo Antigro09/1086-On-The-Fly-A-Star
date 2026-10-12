@@ -103,6 +103,9 @@ def main():
                  "pathplanning.geometric.ContractSuite"])
     if "PASS: 18 acceptance groups" not in suite:
         raise ValueError("Acceptance-suite summary changed")
+    curves = run([home / "bin" / "java", "-Xmx128m", "-cp", classpath, "pathplanning.motion.BezierSuite"])
+    timing = run([home / "bin" / "java", "-Xmx128m", "-cp", classpath, "pathplanning.motion.TimingSuite"])
+    motion = run([home / "bin" / "java", "-Xmx128m", "-cp", classpath, "pathplanning.backend.CurvedMotionIntegrationSuite"])
     integration = run([home / "bin" / "java", "-Xmx128m", "-cp", classpath,
                        "pathplanning.backend.WorldStateEnvelopeIntegrationSuite"])
     if "PASS: 20 World-State envelope/adapter/owner-validator checks" not in integration:
@@ -121,6 +124,7 @@ def main():
         "api_export_source": {'repository': 'https://github.com/Antigro09/1086-On-The-Fly-A-Star', 'revision': '59ad897d895315a751df67c5751e30370850a784', 'path': 'vendor/world-state-api-src', 'note': 'Exact earlier owner exports compiled for this evidence; owner classes excluded from production jars.'},
         "owner_public_source": {'repository': 'https://github.com/Antigro09/FRC-World-State', 'revision': '0e5b6c3f85d47205cde8b0c80e13fa79d35e95ab', 'exact_source_matches': ['PlannerBackend.java', 'ObstacleEnvelopeBuilder.java', 'PlannerValidation.java'], 'earlier_support_copies': ['Geometry.java', 'World.java'], 'note': 'See vendor/world-state-api-src/PROVENANCE.md for the two documented validation differences.'},
         "wpilib_runtime_classpath": [], "suite_output": suite, "smoke_output": smoke,
+        "curve_suite_output": curves, "timing_suite_output": timing, "motion_integration_output": motion,
         "compiled_source_sha256": {str(path.relative_to(ROOT)): hashlib.sha256(path.read_bytes()).hexdigest()
                                    for path in sorted({path for _, source_files, _ in groups for path in source_files})},
         "owner_integration_output": integration, "owner_fixture_sha256": FIXTURE_PINS,

@@ -74,7 +74,15 @@ public final class DashboardContractSuite {
             do { state = model.state("sandbox"); if (!state.get("plan").get("status").asText().equals("PENDING")) break; Thread.sleep(2); }
             while (System.nanoTime() < deadline);
             check(state.get("plan").get("status").asText().equals("SUCCESS") && state.get("plan").get("positions").size() >= 2, "actual backend sandbox geometry");
+            JsonNode motion=state.get("plan").get("motion");
+            check(motion!=null && motion.get("duration_s").doubleValue()>0 && motion.get("samples").size()>2,
+                    "Actual backend emits a separately timed curve profile");
+            check(wire(state).get("plan").get("motion").get("planned_start_us").isTextual(),"Motion start timestamp is an exact decimal string");
+            check(!motion.get("executable").booleanValue() && motion.get("candidate_count").intValue()>0,"Motion preview carries no robot execution authority");
+            check(motion.get("samples").get(0).get("speed_mps").doubleValue()==0
+                    && motion.get("samples").get(motion.get("samples").size()-1).get("speed_mps").doubleValue()==0,"Wire endpoint velocities preserved");
             model.cancel(); check(model.state("sandbox").get("plan").get("positions").isEmpty(), "cancel clears display proposal");
+            check(!model.state("sandbox").get("plan").has("motion"),"Cancel removes curve and timed profile together");
             model.updateScenario(object().set("field_map", nonrect));
             rejects(() -> model.plan(object()), "unsupported imported boundary fails closed");
         }

@@ -21,7 +21,7 @@ final class JsonSupport {
     static final int MAX_POINTS = 512;
     static final int MAX_OBSTACLES = 128;
     private static final Set<String> LONG_FIELDS = Set.of("robot_us", "captured_us", "estimated_robot_us", "age_us",
-            "epoch", "snapshot_id", "obstacle_map_version", "sequence", "generation", "issued_us", "valid_until_us", "solver_duration_ns");
+            "epoch", "snapshot_id", "obstacle_map_version", "sequence", "generation", "issued_us", "valid_until_us", "planned_start_us", "solver_duration_ns");
     private JsonSupport() {}
 
     static ObjectNode object() { return MAPPER.createObjectNode(); }
