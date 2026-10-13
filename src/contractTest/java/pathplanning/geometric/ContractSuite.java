@@ -25,6 +25,7 @@ public final class ContractSuite {
         run("diagonal corner cutting and thin obstacle sweep",ContractSuite::sweep);
         run("field edges and entire goal tolerance region",ContractSuite::edgesAndTolerance);
         run("immutable static/dynamic snapshot",ContractSuite::immutableSnapshot);
+        run("empty static grid fast path preserves collision and cancellation",ContractSuite::emptyStaticGrid);
         run("no path and bounded expansion/queues",ContractSuite::noPathAndLimits);
         run("monotonic timeout and cancellation polling",ContractSuite::timeoutCancellation);
         run("pinned adapter identities, clocks, geometry-only output",ContractSuite::adapter);
@@ -132,6 +133,24 @@ public final class ContractSuite {
         Input base=input(map(List.of())); require(plan(endpoints(base,new Pose(0.01,2,0),base.goal())).status()==Status.UNSAFE_START,"Field edge footprint ignored");
         Input i=new Input(base.start(),new Pose(5.65,2,0),footprint(),new Constraints(3,3,4,0,0,0.2,0.1),base.map(),BUDGET,true);
         require(plan(i).status()==Status.UNSAFE_GOAL,"Tolerance region extends beyond field");
+    }
+    private static void emptyStaticGrid() {
+        boolean[] grid = new boolean[2400];
+        MapSnapshot empty = new MapSnapshot(6,4,0.1,60,40,grid,List.of());
+        grid[20*60+30] = true;
+        require(!empty.hasStaticOccupancy(),"Cached empty flag changed after source mutation");
+        MapSnapshot occupied = new MapSnapshot(6,4,0.1,60,40,grid,List.of());
+        grid[20*60+30] = false;
+        require(occupied.hasStaticOccupancy(),"Cached occupied flag lost source obstacle");
+        Pose a = new Pose(0.6,2.05,0), b = new Pose(5.4,2.05,0);
+        require(SweptCollision.safe(empty,a,b,0.2,()->{}),"Empty grid rejected safe segment");
+        require(!SweptCollision.safe(occupied,a,b,0.2,()->{}),"Static obstacle bypassed");
+        MapSnapshot dynamic = map(List.of(block("wall",2.9,0,3.1,4)));
+        require(!dynamic.hasStaticOccupancy() && !SweptCollision.safe(dynamic,a,b,0.2,()->{}),"Dynamic obstacle bypassed by empty flag");
+        require(!SweptCollision.safe(empty,new Pose(0.1,2,0),b,0.2,()->{}),"Field edge bypassed");
+        AtomicInteger polls = new AtomicInteger();
+        SweptCollision.safe(dynamic,a,b,0.2,polls::incrementAndGet);
+        require(polls.get()>=2,"Dynamic scan cancellation poll lost");
     }
     private static void immutableSnapshot() {
         boolean[] cells=new boolean[2400]; cells[20*60+30]=true;

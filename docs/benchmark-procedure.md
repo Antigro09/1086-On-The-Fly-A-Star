@@ -1,6 +1,6 @@
 # Unrun controller benchmark procedure
 
-No benchmark or hardware qualification has been run. CPU synthetic tests on the development Mac validate software behavior; they establish no roboRIO/Systemcore planning rate, deadline guarantee or motion safety.
+Development Mac benchmarks are recorded in [mac-performance.md](mac-performance.md). Controller benchmarks and hardware qualification remain unrun. CPU synthetic tests on the Mac establish no roboRIO/Systemcore planning rate, deadline guarantee or motion safety.
 
 When separately authorized, use the exact chosen controller/software profile without actuating hardware. Record controller model/serial/hardware revision, OS image, WPILib/JDK versions, planner commit/API hash/options, CPU governor, battery/power conditions and competing robot-program CPU/network load. Benchmark each target separately: roboRIO/WPILib2026.2.2/JDK17, then supported Systemcore image≥14/WPILib2027alpha7/JDK25. Do not benchmark WPILib2026+Systemcore as a supported combination.
 

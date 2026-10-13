@@ -1,0 +1,434 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:frc:field-map:1",
+  "title": "Local physical field map v1",
+  "description": "JSON shape only. Runtime geometry, calibration, image bounds/content identity and exact approval digest checks are additionally required. No actuator or live-state authority.",
+  "$defs": {
+    "point": {
+      "type": "array",
+      "items": {
+        "type": "number"
+      },
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "ring": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/point"
+      },
+      "minItems": 4,
+      "maxItems": 257
+    },
+    "control": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "pixel": {
+          "$ref": "#/$defs/point"
+        },
+        "field_m": {
+          "$ref": "#/$defs/point"
+        }
+      },
+      "required": [
+        "pixel",
+        "field_m"
+      ]
+    },
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "state": {
+          "enum": [
+            "draft",
+            "approved"
+          ]
+        },
+        "reviewed_revision": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        }
+      },
+      "required": [
+        "state",
+        "reviewed_revision"
+      ]
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "suggested",
+            "manual",
+            "verified_source"
+          ]
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "uri": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 1024
+        }
+      },
+      "required": [
+        "kind",
+        "label",
+        "uri"
+      ]
+    }
+  },
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "frc-field-map/1"
+    },
+    "map": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "season": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 1024
+        },
+        "variant": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "frame": {
+          "const": "wpilib_nwu"
+        },
+        "units": {
+          "const": "m"
+        },
+        "width_m": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 100
+        },
+        "height_m": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 100
+        }
+      },
+      "required": [
+        "id",
+        "revision",
+        "season",
+        "variant",
+        "frame",
+        "units",
+        "width_m",
+        "height_m"
+      ]
+    },
+    "image": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "file_name": {
+          "type": "string",
+          "pattern": "^(?!\\.)[^/\\\\:]+\\.(?:[Pp][Nn][Gg]|[Jj][Pp][Ee]?[Gg]|[Ww][Ee][Bb][Pp])$",
+          "maxLength": 128
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "width_px": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8192
+        },
+        "height_px": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8192
+        },
+        "mime_type": {
+          "enum": [
+            "image/png",
+            "image/jpeg",
+            "image/webp"
+          ]
+        },
+        "attribution": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "license": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 1024
+        }
+      },
+      "required": [
+        "file_name",
+        "sha256",
+        "width_px",
+        "height_px",
+        "mime_type",
+        "attribution",
+        "license"
+      ]
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "synthetic",
+            "user_image",
+            "official_geometry"
+          ]
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "uri": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 1024
+        }
+      },
+      "required": [
+        "kind",
+        "label",
+        "uri"
+      ]
+    },
+    "calibration": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "model": {
+          "const": "affine"
+        },
+        "image_to_field": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 9,
+          "maxItems": 9
+        },
+        "control_points": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/control"
+          },
+          "minItems": 2,
+          "maxItems": 32
+        },
+        "distortion": {
+          "enum": [
+            "uncorrected",
+            "corrected",
+            "not_applicable"
+          ]
+        },
+        "fit_error_m": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "independent_check_error_m": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "independent_check_points": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/control"
+          },
+          "maxItems": 32
+        }
+      },
+      "required": [
+        "model",
+        "image_to_field",
+        "control_points",
+        "distortion",
+        "fit_error_m",
+        "independent_check_error_m",
+        "independent_check_points"
+      ]
+    },
+    "boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "outer": {
+          "$ref": "#/$defs/ring"
+        },
+        "holes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ring"
+          },
+          "maxItems": 16
+        },
+        "review": {
+          "$ref": "#/$defs/review"
+        },
+        "provenance": {
+          "$ref": "#/$defs/provenance"
+        }
+      },
+      "required": [
+        "outer",
+        "holes",
+        "review",
+        "provenance"
+      ]
+    },
+    "obstacles": {
+      "type": "array",
+      "maxItems": 64,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "outer": {
+            "$ref": "#/$defs/ring"
+          },
+          "holes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ring"
+            },
+            "maxItems": 16
+          },
+          "review": {
+            "$ref": "#/$defs/review"
+          },
+          "provenance": {
+            "$ref": "#/$defs/provenance"
+          },
+          "vertical_range_m": {
+            "anyOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "min": {
+                    "type": "number",
+                    "minimum": -1000,
+                    "maximum": 1000
+                  },
+                  "max": {
+                    "type": "number",
+                    "minimum": -1000,
+                    "maximum": 1000
+                  }
+                },
+                "required": [
+                  "min",
+                  "max"
+                ]
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "outer",
+          "holes",
+          "review",
+          "provenance",
+          "vertical_range_m"
+        ]
+      }
+    },
+    "approval": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "state": {
+          "enum": [
+            "draft",
+            "approved"
+          ]
+        },
+        "reviewed_revision": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        },
+        "content_sha256": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "state",
+        "reviewed_revision",
+        "content_sha256"
+      ]
+    }
+  },
+  "required": [
+    "schema_version",
+    "map",
+    "image",
+    "source",
+    "calibration",
+    "boundary",
+    "obstacles",
+    "approval"
+  ]
+}

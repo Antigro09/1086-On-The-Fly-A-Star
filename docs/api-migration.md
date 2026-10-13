@@ -4,6 +4,16 @@ Production callers migrate from `HybridAStarPlanner.plan(Pose3d,Pose3d)` and `Pl
 
 The old `Trajectory.getNominalDuration()` was a search timeout mislabeled as motion time. It has no replacement motion-duration method. `Result.solverDurationNanos()` is measured monotonic computation. `Result.trajectory()` is null. External time parameterization must use actual current velocity, heading and verified dynamics, then recheck collision and freshness; no timed PathPlanner conversion is implemented.
 
+An optional separate `CurvedMotionPlanner.Proposal` now carries immutable Bézier
+geometry and a kinematic `MotionPath.Profile`; its `durationSec` measures proposed
+motion under explicit limits. The owner SPI is unchanged and its `trajectory`
+remains null. Adopt this extension explicitly, retain its original request and
+distinguish `planningDurationNanos` from profile duration. Full-plan mode requires
+remaining forecast coverage; receding-horizon mode qualifies only the prefix
+before expiry. Desired final speed is an extra limit and must fit the owner's
+goal velocity tolerance. [Curved-motion migration and limits](curved-motion.md)
+describe the scheduling, collision and execution boundaries.
+
 The core implementation's `Geometry` values are solver internals, not an alternative cross-task contract. Public integration uses only World-State `frc-planner/1`; the adapter echoes all v1 result identity fields. v1 does not carry field identity, full constraints or endpoint velocity in Result; retain the immutable request indexed by request ID. The gate additionally validates field identity. v1 supplies start velocity and goal velocity tolerance, but no requested final velocity; this geometric backend produces no endpoint-speed feasibility claim. Internal solver tests accept/reject start/end speed metadata independently of geometric path duration.
 
 Internal statuses `UNSAFE_START`, `UNSAFE_GOAL`, `NO_PATH`, `COLLISION_VALIDATION_FAILED` become v1 `NO_PATH`, preserving the precise reason in detail. `RESOURCE_LIMIT` becomes `TIMEOUT` with a resource-limit detail. Constructor/constraint/map defects become `INVALID_INPUT`; old identity/expired robot timestamps become `STALE_RESULT`; cancellation becomes `CANCELLED`. Failure always carries no executable path.

@@ -9,17 +9,21 @@ public final class SweptCollision {
     public static boolean safe(MapSnapshot map, Pose a, Pose b, double radius, Runnable poll) {
         poll.run();
         if (!inside(map, a, radius) || !inside(map, b, radius)) return false;
-        // One-cell closed-boundary padding also covers decimal division rounding at exact tangency.
-        int minX = Math.max(0, (int)Math.floor((Math.min(a.x(), b.x()) - radius) / map.cellSize()) - 1);
-        int maxX = Math.min(map.columns() - 1, (int)Math.floor((Math.max(a.x(), b.x()) + radius) / map.cellSize()) + 1);
-        int minY = Math.max(0, (int)Math.floor((Math.min(a.y(), b.y()) - radius) / map.cellSize()) - 1);
-        int maxY = Math.min(map.rows() - 1, (int)Math.floor((Math.max(a.y(), b.y()) + radius) / map.cellSize()) + 1);
-        for (int y = minY; y <= maxY; y++) {
-            poll.run();
-            for (int x = minX; x <= maxX; x++) {
-                if ((x & 63) == 0) poll.run();
-                if (map.occupied(x, y) && intersects(a, b, new Rectangle(x * map.cellSize(), y * map.cellSize(),
-                    Math.min(map.width(), (x + 1) * map.cellSize()), Math.min(map.height(), (y + 1) * map.cellSize())), radius)) return false;
+        // An immutable empty static grid needs no cell scan. Boundaries and every dynamic envelope
+        // are still checked, and this flag cannot change under an active search.
+        if (map.hasStaticOccupancy()) {
+            // One-cell closed-boundary padding also covers decimal division rounding at exact tangency.
+            int minX = Math.max(0, (int)Math.floor((Math.min(a.x(), b.x()) - radius) / map.cellSize()) - 1);
+            int maxX = Math.min(map.columns() - 1, (int)Math.floor((Math.max(a.x(), b.x()) + radius) / map.cellSize()) + 1);
+            int minY = Math.max(0, (int)Math.floor((Math.min(a.y(), b.y()) - radius) / map.cellSize()) - 1);
+            int maxY = Math.min(map.rows() - 1, (int)Math.floor((Math.max(a.y(), b.y()) + radius) / map.cellSize()) + 1);
+            for (int y = minY; y <= maxY; y++) {
+                poll.run();
+                for (int x = minX; x <= maxX; x++) {
+                    if ((x & 63) == 0) poll.run();
+                    if (map.occupied(x, y) && intersects(a, b, new Rectangle(x * map.cellSize(), y * map.cellSize(),
+                        Math.min(map.width(), (x + 1) * map.cellSize()), Math.min(map.height(), (y + 1) * map.cellSize())), radius)) return false;
+                }
             }
         }
         for (Envelope envelope : map.dynamic()) {

@@ -26,12 +26,16 @@ public final class Geometry {
         private final double width, height, cellSize;
         private final int columns, rows;
         private final boolean[] occupied;
+        private final boolean hasStaticOccupancy;
         private final List<Envelope> dynamic;
         public MapSnapshot(double width, double height, double cellSize, int columns, int rows,
                            boolean[] occupied, List<Envelope> dynamic) {
             this.width = width; this.height = height; this.cellSize = cellSize;
             this.columns = columns; this.rows = rows;
             this.occupied = occupied == null ? null : occupied.clone();
+            boolean any = false;
+            if (this.occupied != null) for (boolean cell : this.occupied) if (cell) { any = true; break; }
+            this.hasStaticOccupancy = any;
             this.dynamic = dynamic == null ? null : List.copyOf(dynamic);
         }
         public double width() { return width; }
@@ -41,6 +45,8 @@ public final class Geometry {
         public int rows() { return rows; }
         public List<Envelope> dynamic() { return dynamic; }
         public int occupancySize() { return occupied == null ? -1 : occupied.length; }
+        /** Cached from the owned immutable copy; dynamic envelopes remain independent. */
+        public boolean hasStaticOccupancy() { return hasStaticOccupancy; }
         public boolean occupied(int x, int y) { return occupied[y * columns + x]; }
     }
     public record Input(Pose start, Pose goal, Footprint footprint, Constraints constraints,
